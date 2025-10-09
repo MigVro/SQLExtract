@@ -1,0 +1,161 @@
+"""Main extraction orchestration module."""
+
+from typing import List, Optional, Dict, Any
+from .connection import DatabaseConnection, ConnectionConfig
+from .schema import SchemaReader
+from .constraints import ConstraintExtractor
+from .indexes import IndexExtractor
+from .dependency import order_tables_by_dependency
+from .seed_data import SeedDataExtractor
+from .formatter import SQLFormatter
+from .utils import get_logger, ExtractionError
+
+logger = get_logger(__name__)
+
+
+class DatabaseExtractor:
+    """Main database schema extractor."""
+
+    def __init__(self, config: ConnectionConfig):
+        """Initialize database extractor.
+
+        Args:
+            config: Connection configuration
+        """
+        self.config = config
+        self.connection: Optional[DatabaseConnection] = None
+
+    def extract(
+        self,
+        output_dir: str,
+        schema_filter: Optional[List[str]] = None,
+        extract_seed_data: bool = False,
+        seed_tables: Optional[List[str]] = None,
+        max_rows: Optional[int] = None
+    ) -> None:
+        """Extract database schema and data.
+
+        Args:
+            output_dir: Output directory for SQL scripts
+            schema_filter: Optional list of schemas to include
+            extract_seed_data: Whether to extract seed data
+            seed_tables: Optional list of tables for seed data (format: schema.table)
+            max_rows: Maximum rows per table for seed data
+        """
+        try:
+            # Connect to database
+            logger.info("Connecting to database...")
+            self.connection = DatabaseConnection(self.config)
+            self.connection.connect()
+
+            # Initialize components
+            schema_reader = SchemaReader(self.connection)
+            constraint_extractor = ConstraintExtractor(self.connection)
+            index_extractor = IndexExtractor(self.connection)
+            seed_data_extractor = SeedDataExtractor(self.connection)
+            formatter = SQLFormatter(output_dir)
+
+            # Extract schemas
+            logger.info("Extracting schemas...")
+            schemas = schema_reader.get_schemas(schema_filter)
+
+            # Extract tables
+            logger.info("Extracting tables...")
+            tables = schema_reader.get_tables(schema_filter)
+
+            # Extract constraints
+            logger.info("Extracting constraints...")
+            primary_keys = constraint_extractor.get_primary_keys(schema_filter)
+            foreign_keys = constraint_extractor.get_foreign_keys(schema_filter)
+            unique_constraints = constraint_extractor.get_unique_constraints(schema_filter)
+            check_constraints = constraint_extractor.get_check_constraints(schema_filter)
+
+            # Order tables by dependency
+            logger.info("Analyzing dependencies...")
+            table_tuples = [(t.schema_name, t.table_name) for t in tables]
+            ordered_table_tuples, deferred_fks = order_tables_by_dependency(table_tuples, foreign_keys)
+
+            # Reorder tables list
+            table_map = {(t.schema_name, t.table_name): t for t in tables}
+            ordered_tables = [table_map[t] for t in ordered_table_tuples if t in table_map]
+
+            # Extract indexes
+            logger.info("Extracting indexes...")
+            indexes = index_extractor.get_indexes(schema_filter)
+
+            # Extract views
+            logger.info("Extracting views...")
+            views = schema_reader.get_views(schema_filter)
+
+            # Extract stored procedures
+            logger.info("Extracting stored procedures...")
+            procedures = schema_reader.get_stored_procedures(schema_filter)
+
+            # Extract functions
+            logger.info("Extracting functions...")
+            functions = schema_reader.get_functions(schema_filter)
+
+            # Extract seed data if requested
+            seed_data = []
+            if extract_seed_data:
+                logger.info("Extracting seed data...")
+
+                # Determine which tables to extract data from
+                data_tables = []
+                if seed_tables:
+                    # Parse seed_tables list (format: schema.table)
+                    for table_spec in seed_tables:
+                        parts = table_spec.split('.')
+                        if len(parts) == 2:
+                            schema_name, table_name = parts
+                            matching_table = next(
+                                (t for t in ordered_tables if t.schema_name == schema_name and t.table_name == table_name),
+                                None
+                            )
+                            if matching_table:
+                                data_tables.append(matching_table)
+                            else:
+                                logger.warning(f"Table {table_spec} not found")
+                        else:
+                            logger.warning(f"Invalid table specification: {table_spec}")
+                else:
+                    # Extract from all tables
+                    data_tables = ordered_tables
+
+                # Extract data in dependency order
+                for table in data_tables:
+                    logger.info(f"Extracting data from {table.schema_name}.{table.table_name}...")
+                    table_data = seed_data_extractor.extract_table_data(
+                        table.schema_name,
+                        table.table_name,
+                        table.columns,
+                        max_rows=max_rows
+                    )
+                    seed_data.extend(table_data)
+
+            # Generate SQL scripts
+            logger.info("Generating SQL scripts...")
+            formatter.write_modular_format(
+                schemas=schemas,
+                tables=ordered_tables,
+                primary_keys=primary_keys,
+                foreign_keys=foreign_keys,
+                deferred_foreign_keys=deferred_fks,
+                unique_constraints=unique_constraints,
+                check_constraints=check_constraints,
+                indexes=indexes,
+                views=views,
+                procedures=procedures,
+                functions=functions,
+                seed_data=seed_data
+            )
+
+            logger.info("Extraction complete!")
+
+        except Exception as e:
+            logger.error(f"Extraction failed: {e}")
+            raise ExtractionError(f"Extraction failed: {e}")
+
+        finally:
+            if self.connection:
+                self.connection.close()
