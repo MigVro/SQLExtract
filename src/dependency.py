@@ -91,23 +91,23 @@ class DependencyGraph:
             Tuple of (ordered tables, deferred foreign keys)
             Deferred foreign keys are those that create circular dependencies
         """
-        # Calculate in-degree for each node
-        in_degree = {table: 0 for table in self.all_tables}
-        for table in self.all_tables:
-            for dep in self.graph.get(table, []):
-                if dep in in_degree:
-                    in_degree[dep] += 1
+        # Calculate in-degree for each node (how many tables each table depends on)
+        # In-degree = number of incoming edges = number of dependencies
+        in_degree = {table: len(self.graph.get(table, set())) for table in self.all_tables}
 
-        # Queue for nodes with no dependencies
+        # Queue for nodes with no dependencies (in-degree = 0)
+        # These tables can be created first
         queue = deque([table for table, degree in in_degree.items() if degree == 0])
         sorted_tables = []
         deferred_fks = []
 
         while queue:
+            # Process a table with no remaining dependencies
             table = queue.popleft()
             sorted_tables.append(table)
 
-            # Reduce in-degree for dependent tables
+            # For all tables that depend on this table, reduce their in-degree
+            # (since this dependency is now satisfied)
             for dependent in self.reverse_graph.get(table, []):
                 in_degree[dependent] -= 1
                 if in_degree[dependent] == 0:

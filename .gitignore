@@ -48,3 +48,7 @@ secrets.yaml
 
 # OS
 Thumbs.db
+# Ignore test output directories
+dev-svdb-*
+output/
+*.sql
