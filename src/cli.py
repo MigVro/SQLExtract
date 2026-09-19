@@ -103,6 +103,18 @@ def _run(
             click.echo("Error: --user and --password required when not using Windows Authentication", err=True)
             sys.exit(5)
 
+        if not (1 <= port <= 65535):
+            click.echo(f"Error: --port must be between 1 and 65535, got {port}", err=True)
+            sys.exit(5)
+
+        if max_rows is not None and max_rows <= 0:
+            click.echo(f"Error: --max-rows must be a positive integer, got {max_rows}", err=True)
+            sys.exit(5)
+
+        if max_workers < 1:
+            click.echo(f"Error: --max-workers must be at least 1, got {max_workers}", err=True)
+            sys.exit(5)
+
         # Parse schema filter
         schema_filter = None
         if schemas:

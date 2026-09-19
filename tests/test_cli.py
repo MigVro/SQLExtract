@@ -52,6 +52,20 @@ def test_missing_credentials_exits_5():
     assert result.exit_code == 5
 
 
+@pytest.mark.parametrize('extra_args', [
+    ['--port', '0'],
+    ['--port', '70000'],
+    ['--max-rows', '0'],
+    ['--max-rows', '-5'],
+    ['--max-workers', '0'],
+])
+def test_invalid_numeric_argument_exits_5(extra_args):
+    """Out-of-range --port/--max-rows/--max-workers are rejected before any DB work."""
+    runner = CliRunner()
+    result = runner.invoke(_run, BASE_ARGS + extra_args)
+    assert result.exit_code == 5
+
+
 def test_click_usage_error_remapped_to_5(monkeypatch):
     """Click's own argument validation (e.g. missing --server/--database) normally
     exits with Click's default code 2 - the main() wrapper remaps that to 5."""

@@ -281,9 +281,12 @@
       and "login has no access" by design (SQL Server uses identical wording for both to
       avoid leaking which case it is), so `DatabaseAccessError` states that explicitly
       rather than asserting one
-- [ ] Invalid argument validation — `--user`/`--password` without `--windows-auth` and
-      Click's own required-option/choice validation both map to exit 5; no deeper
-      validation (e.g. `--max-rows` range, `--tables` format) yet
+- [x] Invalid argument validation — `--user`/`--password` without `--windows-auth`,
+      Click's own required-option/choice validation, and range checks on `--port`
+      (1-65535), `--max-rows` (positive), `--max-workers` (>=1) all map to exit 5.
+      `--tables`/`--schemas` format is deliberately left as warn-and-skip at runtime
+      (not upfront validation) — an invalid entry there is dropped with a warning,
+      not a hard failure (explicit decision, not an oversight)
 - [ ] SQL syntax validation (dry-run mode)
 - [ ] Detailed error messages with troubleshooting hints
 
@@ -445,6 +448,19 @@ Before releasing v1.0:
 ---
 
 ## Recent Updates
+
+### 2026-09-19: Deeper Argument Validation (Phase 8, partial)
+- **Added**: range checks in `src/cli.py`'s `_run()`, alongside the existing
+  `--user`/`--password` check — `--port` must be 1-65535, `--max-rows` (if given) must
+  be positive, `--max-workers` must be at least 1. All three exit 5, matching the
+  existing "Invalid Arguments" code.
+- **Explicit decision**: `--tables`/`--schemas` entry format (e.g. `schema.table`) is
+  *not* validated upfront. It stays as the existing runtime behavior in
+  `src/extractor.py` (`extract()`): an invalid `--tables` entry logs a warning and is
+  skipped, the rest of the extraction still succeeds with exit 0. Making that fail fast
+  would be a behavior change for existing callers and was declined.
+- **Tests**: 5 new parametrized cases in `tests/test_cli.py`. Full suite: 138 passed,
+  9 skipped (need real DB).
 
 ### 2026-09-19: Progress Bars (Phase 8, partial)
 - **Added**: `progress`/`task_description` params to `DatabaseExtractor._run_jobs()`
@@ -705,7 +721,7 @@ ordering, CLR function metadata, database-level DDL triggers + explicit trigger 
 tests are now done against a real DB (see 2026-09-19 update); Phase 7's parallel-extraction
 speedup is still unbenchmarked (needs a real DB with meaningful network/query latency).
 Phase 8 (error handling/polish) is now partially started — exit codes,
-permission/database-access error mapping, and progress bars are done (see 2026-09-19
-updates); dry-run mode, troubleshooting hints, and deeper argument validation remain.
+permission/database-access error mapping, progress bars, and numeric argument validation
+are done (see 2026-09-19 updates); dry-run mode and troubleshooting hints remain.
 Phase 9 (packaging/distribution) not started.
 **Estimated Completion**: Not re-estimated — verify remaining Phase 8-9 scope before committing to a timeline
