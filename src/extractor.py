@@ -31,7 +31,8 @@ class DatabaseExtractor:
         schema_filter: Optional[List[str]] = None,
         extract_seed_data: bool = False,
         seed_tables: Optional[List[str]] = None,
-        max_rows: Optional[int] = None
+        max_rows: Optional[int] = None,
+        output_format: str = 'modular'
     ) -> None:
         """Extract database schema and data.
 
@@ -41,6 +42,7 @@ class DatabaseExtractor:
             extract_seed_data: Whether to extract seed data
             seed_tables: Optional list of tables for seed data (format: schema.table)
             max_rows: Maximum rows per table for seed data
+            output_format: Output format - 'single', 'per-object', or 'modular'
         """
         try:
             # Connect to database
@@ -97,6 +99,7 @@ class DatabaseExtractor:
 
             # Extract seed data if requested
             seed_data = []
+            seed_data_by_table: Dict[str, List[str]] = {}
             if extract_seed_data:
                 logger.info("Extracting seed data...")
 
@@ -132,23 +135,55 @@ class DatabaseExtractor:
                         max_rows=max_rows
                     )
                     seed_data.extend(table_data)
+                    seed_data_by_table[f"{table.schema_name}.{table.table_name}"] = table_data
 
             # Generate SQL scripts
             logger.info("Generating SQL scripts...")
-            formatter.write_modular_format(
-                schemas=schemas,
-                tables=ordered_tables,
-                primary_keys=primary_keys,
-                foreign_keys=foreign_keys,
-                deferred_foreign_keys=deferred_fks,
-                unique_constraints=unique_constraints,
-                check_constraints=check_constraints,
-                indexes=indexes,
-                views=views,
-                procedures=procedures,
-                functions=functions,
-                seed_data=seed_data
-            )
+            if output_format == 'single':
+                formatter.write_single_file(
+                    schemas=schemas,
+                    tables=ordered_tables,
+                    primary_keys=primary_keys,
+                    foreign_keys=foreign_keys,
+                    deferred_foreign_keys=deferred_fks,
+                    unique_constraints=unique_constraints,
+                    check_constraints=check_constraints,
+                    indexes=indexes,
+                    views=views,
+                    procedures=procedures,
+                    functions=functions,
+                    seed_data=seed_data
+                )
+            elif output_format == 'per-object':
+                formatter.write_per_object_format(
+                    schemas=schemas,
+                    tables=ordered_tables,
+                    primary_keys=primary_keys,
+                    foreign_keys=foreign_keys,
+                    deferred_foreign_keys=deferred_fks,
+                    unique_constraints=unique_constraints,
+                    check_constraints=check_constraints,
+                    indexes=indexes,
+                    views=views,
+                    procedures=procedures,
+                    functions=functions,
+                    seed_data_by_table=seed_data_by_table
+                )
+            else:
+                formatter.write_modular_format(
+                    schemas=schemas,
+                    tables=ordered_tables,
+                    primary_keys=primary_keys,
+                    foreign_keys=foreign_keys,
+                    deferred_foreign_keys=deferred_fks,
+                    unique_constraints=unique_constraints,
+                    check_constraints=check_constraints,
+                    indexes=indexes,
+                    views=views,
+                    procedures=procedures,
+                    functions=functions,
+                    seed_data=seed_data
+                )
 
             logger.info("Extraction complete!")
 

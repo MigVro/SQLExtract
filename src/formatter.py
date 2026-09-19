@@ -286,6 +286,196 @@ GO
 
 """
 
+    def write_single_file(
+        self,
+        schemas: List[SchemaInfo],
+        tables: List[TableInfo],
+        primary_keys: List[PrimaryKeyInfo],
+        foreign_keys: List[ForeignKeyInfo],
+        deferred_foreign_keys: List[ForeignKeyInfo],
+        unique_constraints: List[UniqueConstraintInfo],
+        check_constraints: List[CheckConstraintInfo],
+        indexes: List[IndexInfo],
+        views: List[Dict[str, Any]],
+        procedures: List[Dict[str, Any]],
+        functions: List[Dict[str, Any]],
+        seed_data: List[str]
+    ) -> None:
+        """Write all SQL scripts to a single file with section comments.
+
+        Args:
+            schemas: List of schemas
+            tables: List of tables
+            primary_keys: List of primary keys
+            foreign_keys: List of foreign keys
+            deferred_foreign_keys: List of deferred foreign keys
+            unique_constraints: List of unique constraints
+            check_constraints: List of check constraints
+            indexes: List of indexes
+            views: List of views
+            procedures: List of procedures
+            functions: List of functions
+            seed_data: List of seed data INSERT statements
+        """
+        path = os.path.join(self.output_dir, 'schema.sql')
+        regular_fks = [fk for fk in foreign_keys if fk not in deferred_foreign_keys]
+
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(self.write_header())
+
+            if schemas:
+                f.write("-- SCHEMAS\n\n")
+                for schema in schemas:
+                    f.write(self.format_schema(schema))
+                    f.write("\n")
+
+            if tables:
+                f.write("-- TABLES\n\n")
+                for table in tables:
+                    f.write(self.format_table(table))
+                    f.write("\n")
+
+            if primary_keys:
+                f.write("-- PRIMARY KEYS\n\n")
+                for pk in primary_keys:
+                    f.write(self.format_primary_key(pk))
+                    f.write("\n")
+
+            if unique_constraints:
+                f.write("-- UNIQUE CONSTRAINTS\n\n")
+                for uq in unique_constraints:
+                    f.write(self.format_unique_constraint(uq))
+                    f.write("\n")
+
+            if regular_fks:
+                f.write("-- FOREIGN KEYS\n\n")
+                for fk in regular_fks:
+                    f.write(self.format_foreign_key(fk))
+                    f.write("\n")
+
+            if check_constraints:
+                f.write("-- CHECK CONSTRAINTS\n\n")
+                for check in check_constraints:
+                    f.write(self.format_check_constraint(check))
+                    f.write("\n")
+
+            if indexes:
+                f.write("-- INDEXES\n\n")
+                for idx in indexes:
+                    f.write(self.format_index(idx))
+                    f.write("\n")
+
+            if views:
+                f.write("-- VIEWS\n\n")
+                for view in views:
+                    f.write(self.format_view(view))
+                    f.write("\n")
+
+            if procedures:
+                f.write("-- STORED PROCEDURES\n\n")
+                for proc in procedures:
+                    f.write(self.format_procedure(proc))
+                    f.write("\n")
+
+            if functions:
+                f.write("-- FUNCTIONS\n\n")
+                for func in functions:
+                    f.write(self.format_function(func))
+                    f.write("\n")
+
+            if deferred_foreign_keys:
+                f.write("-- DEFERRED FOREIGN KEYS (Circular Dependencies)\n\n")
+                for fk in deferred_foreign_keys:
+                    f.write(self.format_foreign_key(fk))
+                    f.write("\n")
+
+            if seed_data:
+                f.write("-- SEED DATA\n\n")
+                for stmt in seed_data:
+                    f.write(stmt)
+                    f.write("\n")
+
+        logger.info(f"Single-file SQL script written to {path}")
+
+    def write_per_object_format(
+        self,
+        schemas: List[SchemaInfo],
+        tables: List[TableInfo],
+        primary_keys: List[PrimaryKeyInfo],
+        foreign_keys: List[ForeignKeyInfo],
+        deferred_foreign_keys: List[ForeignKeyInfo],
+        unique_constraints: List[UniqueConstraintInfo],
+        check_constraints: List[CheckConstraintInfo],
+        indexes: List[IndexInfo],
+        views: List[Dict[str, Any]],
+        procedures: List[Dict[str, Any]],
+        functions: List[Dict[str, Any]],
+        seed_data_by_table: Dict[str, List[str]]
+    ) -> None:
+        """Write each object to its own file, organized in subdirectories by type.
+
+        Args:
+            schemas: List of schemas
+            tables: List of tables
+            primary_keys: List of primary keys
+            foreign_keys: List of foreign keys
+            deferred_foreign_keys: List of deferred foreign keys
+            unique_constraints: List of unique constraints
+            check_constraints: List of check constraints
+            indexes: List of indexes
+            views: List of views
+            procedures: List of procedures
+            functions: List of functions
+            seed_data_by_table: Seed data INSERT statements keyed by "schema.table"
+        """
+        header = self.write_header()
+
+        def write_object(subdir: str, filename: str, sql: str) -> None:
+            dir_path = os.path.join(self.output_dir, subdir)
+            os.makedirs(dir_path, exist_ok=True)
+            with open(os.path.join(dir_path, f"{filename}.sql"), 'w', encoding='utf-8') as f:
+                f.write(header)
+                f.write(sql)
+
+        for schema in schemas:
+            write_object('Schemas', schema.name, self.format_schema(schema))
+
+        for table in tables:
+            write_object('Tables', f"{table.schema_name}.{table.table_name}", self.format_table(table))
+
+        for pk in primary_keys:
+            write_object('Constraints', pk.constraint_name, self.format_primary_key(pk))
+
+        for uq in unique_constraints:
+            write_object('Constraints', uq.constraint_name, self.format_unique_constraint(uq))
+
+        regular_fks = [fk for fk in foreign_keys if fk not in deferred_foreign_keys]
+        for fk in regular_fks:
+            write_object('Constraints', fk.constraint_name, self.format_foreign_key(fk))
+
+        for check in check_constraints:
+            write_object('Constraints', check.constraint_name, self.format_check_constraint(check))
+
+        for idx in indexes:
+            write_object('Indexes', idx.index_name, self.format_index(idx))
+
+        for view in views:
+            write_object('Views', f"{view['schema_name']}.{view['view_name']}", self.format_view(view))
+
+        for proc in procedures:
+            write_object('Procedures', f"{proc['schema_name']}.{proc['procedure_name']}", self.format_procedure(proc))
+
+        for func in functions:
+            write_object('Functions', f"{func['schema_name']}.{func['function_name']}", self.format_function(func))
+
+        for fk in deferred_foreign_keys:
+            write_object('Constraints', f"{fk.constraint_name}_DEFERRED", self.format_foreign_key(fk))
+
+        for table_key, statements in seed_data_by_table.items():
+            write_object('SeedData', table_key, '\n'.join(statements))
+
+        logger.info(f"Per-object SQL scripts written to {self.output_dir}")
+
     def write_modular_format(
         self,
         schemas: List[SchemaInfo],
