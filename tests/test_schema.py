@@ -428,6 +428,85 @@ class TestSchemaReader:
         assert "IN (?)" in call_args[0][0]
         assert call_args[0][1] == ("dbo",)
 
+    def test_get_triggers_groups_events(self, mock_db_connection):
+        """Test that a trigger firing on multiple events is returned once with all events."""
+        mock_insert_row = MagicMock()
+        mock_insert_row.schema_name = "dbo"
+        mock_insert_row.table_name = "Orders"
+        mock_insert_row.trigger_name = "trg_Orders_Audit"
+        mock_insert_row.is_instead_of_trigger = False
+        mock_insert_row.is_disabled = False
+        mock_insert_row.event_type = "INSERT"
+        mock_insert_row.definition = "CREATE TRIGGER dbo.trg_Orders_Audit ON dbo.Orders AFTER INSERT, UPDATE AS ..."
+
+        mock_update_row = MagicMock()
+        mock_update_row.schema_name = "dbo"
+        mock_update_row.table_name = "Orders"
+        mock_update_row.trigger_name = "trg_Orders_Audit"
+        mock_update_row.is_instead_of_trigger = False
+        mock_update_row.is_disabled = False
+        mock_update_row.event_type = "UPDATE"
+        mock_update_row.definition = mock_insert_row.definition
+
+        mock_db_connection.fetch_all.return_value = [mock_insert_row, mock_update_row]
+
+        reader = SchemaReader(mock_db_connection)
+        triggers = reader.get_triggers()
+
+        assert len(triggers) == 1
+        assert triggers[0]['trigger_name'] == "trg_Orders_Audit"
+        assert triggers[0]['events'] == ["INSERT", "UPDATE"]
+        assert triggers[0]['is_instead_of'] is False
+        assert triggers[0]['is_disabled'] is False
+
+    def test_get_triggers_instead_of_and_disabled(self, mock_db_connection):
+        """Test INSTEAD OF and disabled trigger flags are captured."""
+        mock_row = MagicMock()
+        mock_row.schema_name = "dbo"
+        mock_row.table_name = "vwOrders"
+        mock_row.trigger_name = "trg_vwOrders_Instead"
+        mock_row.is_instead_of_trigger = True
+        mock_row.is_disabled = True
+        mock_row.event_type = "DELETE"
+        mock_row.definition = "CREATE TRIGGER dbo.trg_vwOrders_Instead ON dbo.vwOrders INSTEAD OF DELETE AS ..."
+
+        mock_db_connection.fetch_all.return_value = [mock_row]
+
+        reader = SchemaReader(mock_db_connection)
+        triggers = reader.get_triggers()
+
+        assert triggers[0]['is_instead_of'] is True
+        assert triggers[0]['is_disabled'] is True
+
+    def test_get_triggers_skip_encrypted(self, mock_db_connection):
+        """Test that encrypted triggers are skipped."""
+        mock_row = MagicMock()
+        mock_row.schema_name = "dbo"
+        mock_row.table_name = "Orders"
+        mock_row.trigger_name = "trg_Encrypted"
+        mock_row.is_instead_of_trigger = False
+        mock_row.is_disabled = False
+        mock_row.event_type = "INSERT"
+        mock_row.definition = None  # Encrypted
+
+        mock_db_connection.fetch_all.return_value = [mock_row]
+
+        reader = SchemaReader(mock_db_connection)
+        triggers = reader.get_triggers()
+
+        assert len(triggers) == 0
+
+    def test_get_triggers_with_filter(self, mock_db_connection):
+        """Test getting triggers with schema filter."""
+        mock_db_connection.fetch_all.return_value = []
+
+        reader = SchemaReader(mock_db_connection)
+        reader.get_triggers(schema_filter=["dbo"])
+
+        call_args = mock_db_connection.fetch_all.call_args
+        assert "IN (?)" in call_args[0][0]
+        assert call_args[0][1] == ("dbo",)
+
 
 class TestDataClasses:
     """Test schema dataclasses."""

@@ -255,6 +255,74 @@ class SchemaReader:
         logger.info(f"Found {len(dependencies)} view-to-view dependencies")
         return dependencies
 
+    def get_triggers(self, schema_filter: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """Get all DML triggers on tables (AFTER and INSTEAD OF).
+
+        Database-level DDL triggers are out of scope.
+
+        Args:
+            schema_filter: Optional list of schema names to include
+
+        Returns:
+            List of trigger information dictionaries
+        """
+        query = """
+        SELECT
+            s.name AS schema_name,
+            t.name AS table_name,
+            tr.name AS trigger_name,
+            tr.is_instead_of_trigger,
+            tr.is_disabled,
+            te.type_desc AS event_type,
+            m.definition AS definition
+        FROM sys.triggers tr
+        INNER JOIN sys.tables t ON tr.parent_id = t.object_id
+        INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+        INNER JOIN sys.trigger_events te ON tr.object_id = te.object_id
+        LEFT JOIN sys.sql_modules m ON tr.object_id = m.object_id
+        WHERE tr.is_ms_shipped = 0 AND tr.parent_class = 1
+        """
+
+        if schema_filter:
+            placeholders = ','.join(['?' for _ in schema_filter])
+            query += f" AND s.name IN ({placeholders})"
+            query += " ORDER BY s.name, t.name, tr.name"
+            results = self.connection.fetch_all(query, tuple(schema_filter))
+        else:
+            query += " ORDER BY s.name, t.name, tr.name"
+            results = self.connection.fetch_all(query)
+
+        trigger_dict: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
+        skipped_encrypted: set = set()
+
+        for row in results:
+            key = (row.schema_name, row.table_name, row.trigger_name)
+            if key in skipped_encrypted:
+                continue
+
+            if key not in trigger_dict:
+                if row.definition is None:
+                    logger.warning(f"Trigger {row.schema_name}.{row.table_name}.{row.trigger_name} is encrypted - skipping")
+                    skipped_encrypted.add(key)
+                    continue
+
+                trigger_dict[key] = {
+                    'schema_name': row.schema_name,
+                    'table_name': row.table_name,
+                    'trigger_name': row.trigger_name,
+                    'is_instead_of': bool(row.is_instead_of_trigger),
+                    'is_disabled': bool(row.is_disabled),
+                    'events': [],
+                    'definition': row.definition.replace('\r\n', '\n')
+                }
+
+            if row.event_type not in trigger_dict[key]['events']:
+                trigger_dict[key]['events'].append(row.event_type)
+
+        triggers = list(trigger_dict.values())
+        logger.info(f"Found {len(triggers)} triggers")
+        return triggers
+
     def get_stored_procedures(self, schema_filter: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """Get all stored procedures from database.
 

@@ -270,6 +270,26 @@ GO
         # Definition already includes CREATE FUNCTION
         return definition + "\nGO\n"
 
+    def format_trigger(self, trigger: Dict[str, Any]) -> str:
+        """Generate CREATE TRIGGER statement.
+
+        Args:
+            trigger: Trigger information dictionary
+
+        Returns:
+            SQL statement
+        """
+        definition = trigger['definition']
+        sql = definition + "\nGO\n"
+
+        if trigger['is_disabled']:
+            sql += f"""
+DISABLE TRIGGER {escape_sql_identifier(trigger['trigger_name'])} ON {escape_sql_identifier(trigger['schema_name'])}.{escape_sql_identifier(trigger['table_name'])}
+GO
+"""
+
+        return sql
+
     def write_header(self) -> str:
         """Generate SQL script header.
 
@@ -306,6 +326,7 @@ GO
         views: List[Dict[str, Any]],
         procedures: List[Dict[str, Any]],
         functions: List[Dict[str, Any]],
+        triggers: List[Dict[str, Any]],
         seed_data: List[str]
     ) -> None:
         """Write all SQL scripts to a single file with section comments.
@@ -322,6 +343,7 @@ GO
             views: List of views
             procedures: List of procedures
             functions: List of functions
+            triggers: List of triggers
             seed_data: List of seed data INSERT statements
         """
         path = os.path.join(self.output_dir, 'schema.sql')
@@ -390,6 +412,12 @@ GO
                     f.write(self.format_function(func))
                     f.write("\n")
 
+            if triggers:
+                f.write("-- TRIGGERS\n\n")
+                for trigger in triggers:
+                    f.write(self.format_trigger(trigger))
+                    f.write("\n")
+
             if deferred_foreign_keys:
                 f.write("-- DEFERRED FOREIGN KEYS (Circular Dependencies)\n\n")
                 for fk in deferred_foreign_keys:
@@ -417,6 +445,7 @@ GO
         views: List[Dict[str, Any]],
         procedures: List[Dict[str, Any]],
         functions: List[Dict[str, Any]],
+        triggers: List[Dict[str, Any]],
         seed_data_by_table: Dict[str, List[str]]
     ) -> None:
         """Write each object to its own file, organized in subdirectories by type.
@@ -433,6 +462,7 @@ GO
             views: List of views
             procedures: List of procedures
             functions: List of functions
+            triggers: List of triggers
             seed_data_by_table: Seed data INSERT statements keyed by "schema.table"
         """
         header = self.write_header()
@@ -475,6 +505,9 @@ GO
         for func in functions:
             write_object('Functions', f"{func['schema_name']}.{func['function_name']}", self.format_function(func))
 
+        for trigger in triggers:
+            write_object('Triggers', f"{trigger['schema_name']}.{trigger['table_name']}.{trigger['trigger_name']}", self.format_trigger(trigger))
+
         for fk in deferred_foreign_keys:
             write_object('Constraints', f"{fk.constraint_name}_DEFERRED", self.format_foreign_key(fk))
 
@@ -496,6 +529,7 @@ GO
         views: List[Dict[str, Any]],
         procedures: List[Dict[str, Any]],
         functions: List[Dict[str, Any]],
+        triggers: List[Dict[str, Any]],
         seed_data: List[str]
     ) -> None:
         """Write SQL scripts in modular format.
@@ -512,6 +546,7 @@ GO
             views: List of views
             procedures: List of procedures
             functions: List of functions
+            triggers: List of triggers
             seed_data: List of seed data INSERT statements
         """
         header = self.write_header()
@@ -574,45 +609,54 @@ GO
                     f.write(self.format_index(idx))
                     f.write("\n")
 
-        # 05: Views
+        # 05: Triggers
+        if triggers:
+            with open(os.path.join(self.output_dir, '05_CREATE_TRIGGERS.sql'), 'w', encoding='utf-8') as f:
+                f.write(header)
+                f.write("-- TRIGGERS\n\n")
+                for trigger in triggers:
+                    f.write(self.format_trigger(trigger))
+                    f.write("\n")
+
+        # 06: Views
         if views:
-            with open(os.path.join(self.output_dir, '05_CREATE_VIEWS.sql'), 'w', encoding='utf-8') as f:
+            with open(os.path.join(self.output_dir, '06_CREATE_VIEWS.sql'), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- VIEWS\n\n")
                 for view in views:
                     f.write(self.format_view(view))
                     f.write("\n")
 
-        # 06: Procedures
+        # 07: Procedures
         if procedures:
-            with open(os.path.join(self.output_dir, '06_CREATE_PROCEDURES.sql'), 'w', encoding='utf-8') as f:
+            with open(os.path.join(self.output_dir, '07_CREATE_PROCEDURES.sql'), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- STORED PROCEDURES\n\n")
                 for proc in procedures:
                     f.write(self.format_procedure(proc))
                     f.write("\n")
 
-        # 07: Functions
+        # 08: Functions
         if functions:
-            with open(os.path.join(self.output_dir, '07_CREATE_FUNCTIONS.sql'), 'w', encoding='utf-8') as f:
+            with open(os.path.join(self.output_dir, '08_CREATE_FUNCTIONS.sql'), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- FUNCTIONS\n\n")
                 for func in functions:
                     f.write(self.format_function(func))
                     f.write("\n")
 
-        # 08: Deferred foreign keys (for circular dependencies)
+        # 09: Deferred foreign keys (for circular dependencies)
         if deferred_foreign_keys:
-            with open(os.path.join(self.output_dir, '08_CREATE_DEFERRED_FKS.sql'), 'w', encoding='utf-8') as f:
+            with open(os.path.join(self.output_dir, '09_CREATE_DEFERRED_FKS.sql'), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- DEFERRED FOREIGN KEYS (Circular Dependencies)\n\n")
                 for fk in deferred_foreign_keys:
                     f.write(self.format_foreign_key(fk))
                     f.write("\n")
 
-        # 09: Seed data
+        # 10: Seed data
         if seed_data:
-            with open(os.path.join(self.output_dir, '09_SEED_DATA.sql'), 'w', encoding='utf-8') as f:
+            with open(os.path.join(self.output_dir, '10_SEED_DATA.sql'), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- SEED DATA\n\n")
                 for stmt in seed_data:

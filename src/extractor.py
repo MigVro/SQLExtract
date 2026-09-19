@@ -108,6 +108,10 @@ class DatabaseExtractor:
             logger.info("Extracting functions...")
             functions = schema_reader.get_functions(schema_filter)
 
+            # Extract triggers
+            logger.info("Extracting triggers...")
+            triggers = schema_reader.get_triggers(schema_filter)
+
             # Extract seed data if requested
             seed_data = []
             seed_data_by_table: Dict[str, List[str]] = {}
@@ -167,6 +171,7 @@ class DatabaseExtractor:
                     views=views,
                     procedures=procedures,
                     functions=functions,
+                    triggers=triggers,
                     seed_data=seed_data
                 )
             elif output_format == 'per-object':
@@ -182,6 +187,7 @@ class DatabaseExtractor:
                     views=views,
                     procedures=procedures,
                     functions=functions,
+                    triggers=triggers,
                     seed_data_by_table=seed_data_by_table
                 )
             else:
@@ -197,6 +203,7 @@ class DatabaseExtractor:
                     views=views,
                     procedures=procedures,
                     functions=functions,
+                    triggers=triggers,
                     seed_data=seed_data
                 )
 

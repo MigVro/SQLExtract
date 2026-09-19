@@ -116,6 +116,45 @@ class TestSQLFormatter:
         assert "REFERENCES" in sql
         assert "ON DELETE CASCADE" in sql
 
+    def test_format_trigger_enabled(self):
+        """Test formatting an enabled trigger emits only the CREATE TRIGGER statement."""
+        formatter = SQLFormatter("/tmp/test")
+
+        trigger = {
+            'schema_name': 'dbo',
+            'table_name': 'Orders',
+            'trigger_name': 'trg_Orders_Audit',
+            'is_instead_of': False,
+            'is_disabled': False,
+            'events': ['INSERT', 'UPDATE'],
+            'definition': 'CREATE TRIGGER dbo.trg_Orders_Audit ON dbo.Orders AFTER INSERT, UPDATE AS ...'
+        }
+
+        sql = formatter.format_trigger(trigger)
+
+        assert "CREATE TRIGGER" in sql
+        assert "DISABLE TRIGGER" not in sql
+
+    def test_format_trigger_disabled(self):
+        """Test formatting a disabled trigger appends a DISABLE TRIGGER statement."""
+        formatter = SQLFormatter("/tmp/test")
+
+        trigger = {
+            'schema_name': 'dbo',
+            'table_name': 'Orders',
+            'trigger_name': 'trg_Orders_Audit',
+            'is_instead_of': False,
+            'is_disabled': True,
+            'events': ['DELETE'],
+            'definition': 'CREATE TRIGGER dbo.trg_Orders_Audit ON dbo.Orders AFTER DELETE AS ...'
+        }
+
+        sql = formatter.format_trigger(trigger)
+
+        assert "CREATE TRIGGER" in sql
+        assert "DISABLE TRIGGER [dbo].[Orders]" not in sql
+        assert "DISABLE TRIGGER [trg_Orders_Audit] ON [dbo].[Orders]" in sql
+
     def test_write_header(self):
         """Test SQL script header generation."""
         formatter = SQLFormatter("/tmp/test")

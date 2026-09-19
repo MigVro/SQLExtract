@@ -117,7 +117,7 @@
 
 ---
 
-## Phase 4: Stored Procedures and Functions (Week 4) - PARTIALLY COMPLETE
+## Phase 4: Stored Procedures and Functions (Week 4) - MOSTLY COMPLETE
 
 > Note: procedure/view/function extraction was implemented in `src/schema.py` (not
 > standalone `src/procedures.py`/`src/functions.py` modules as originally planned),
@@ -139,18 +139,18 @@
   - [ ] CLR functions (metadata only)
 - [x] Generate `CREATE FUNCTION` statements
 
-### Trigger Extraction
-- [ ] Extract trigger definitions (`src/triggers.py`)
-  - [ ] Table triggers (AFTER, INSTEAD OF)
-  - [ ] Database triggers
-  - [ ] Trigger order
-  - [ ] Enabled/disabled state
-- [ ] Generate `CREATE TRIGGER` statements
+### Trigger Extraction ✅
+- [x] Extract trigger definitions (`src/schema.py: get_triggers`, not a standalone `src/triggers.py`)
+  - [x] Table triggers (AFTER, INSTEAD OF)
+  - [ ] Database triggers (scoped out — deliberately out of scope, see 2026-09-19 update)
+  - [ ] Trigger order (first/last via `sp_settriggerorder` — deliberately out of scope, see 2026-09-19 update)
+  - [x] Enabled/disabled state (emitted as a separate `DISABLE TRIGGER` statement after `CREATE TRIGGER`)
+- [x] Generate `CREATE TRIGGER` statements
 
 ### Testing
 - [x] Unit tests for procedure extraction (`tests/test_schema.py`)
 - [x] Unit tests for function extraction (`tests/test_schema.py`)
-- [ ] Unit tests for trigger extraction
+- [x] Unit tests for trigger extraction (`tests/test_schema.py`, `tests/test_formatter.py`)
 - [ ] Integration test: extract and re-deploy all programmability objects
 
 ---
@@ -408,6 +408,26 @@ Before releasing v1.0:
 
 ## Recent Updates
 
+### 2026-09-19: Trigger Extraction (DML table triggers only)
+- **Added**: `SchemaReader.get_triggers()` in `src/schema.py`, querying `sys.triggers` +
+  `sys.trigger_events` for AFTER/INSTEAD OF table triggers, their INSERT/UPDATE/DELETE
+  events, enabled/disabled state, and definition (encrypted triggers warn and skip,
+  matching the procedure/function/view pattern).
+- **Added**: `SQLFormatter.format_trigger()` — emits the `CREATE TRIGGER` statement, plus
+  a trailing `DISABLE TRIGGER` statement if the source trigger was disabled (there's no
+  `DISABLED` clause on `CREATE TRIGGER` itself).
+- **Scoped out** (by explicit decision, not an oversight): database-level DDL triggers
+  (`ON DATABASE`/`ON ALL SERVER` — a different catalog/event model) and explicit
+  first/last trigger execution order (`sp_settriggerorder`) — both rare in practice
+  and roughly doubling the scope of this pass.
+- **Breaking change**: modular output filenames were renumbered to insert triggers —
+  `05_CREATE_TRIGGERS.sql` is new; views/procedures/functions/deferred-FKs/seed-data
+  shifted from 05-09 to 06-10. Anything scripted against the old fixed filenames
+  (e.g. `09_SEED_DATA.sql`) will need updating. No versioned release exists yet, so this
+  was done without a deprecation path.
+- **Tests**: 4 new unit tests in `tests/test_schema.py`, 2 new in `tests/test_formatter.py`.
+  Full suite: 90 passed, 4 skipped (need real DB).
+
 ### 2026-09-19: View Dependency Ordering
 - **Added**: `SchemaReader.get_view_dependencies()` in `src/schema.py`, querying
   `sys.sql_expression_dependencies` for view-to-view references.
@@ -454,6 +474,7 @@ Before releasing v1.0:
 ---
 
 **Last Updated**: 2026-09-19
-**Status**: Phases 1, 2, 3, 5 Complete; Phases 4, 6 Partially/Mostly Complete
-**Current Phase**: Remaining gaps: trigger extraction (Phase 4), deployment script + README generation (Phase 6)
+**Status**: Phases 1, 2, 3, 5 Complete; Phases 4, 6 Mostly Complete
+**Current Phase**: Remaining gaps: database-level DDL triggers + explicit trigger order (Phase 4, deliberately deferred),
+deployment script + README generation (Phase 6)
 **Estimated Completion**: Not re-estimated — verify remaining Phase 7-9 scope before committing to a timeline
