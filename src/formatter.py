@@ -1,12 +1,12 @@
 """SQL script formatter and generator."""
 
 import os
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
 from .schema import SchemaInfo, TableInfo, ColumnInfo
 from .constraints import PrimaryKeyInfo, ForeignKeyInfo, UniqueConstraintInfo, CheckConstraintInfo
 from .indexes import IndexInfo
-from .utils import get_logger, escape_sql_identifier, OutputError
+from .utils import get_logger, escape_sql_identifier, escape_sql_string, OutputError
 
 logger = get_logger(__name__)
 
@@ -110,6 +110,42 @@ GO
         lines.append("GO")
 
         return '\n'.join(lines)
+
+    def format_extended_properties(self, schema_name: str, table_name: str, properties: Dict[str, Any]) -> str:
+        """Generate sp_addextendedproperty statements for a table's MS_Description properties.
+
+        Args:
+            schema_name: Table's schema name
+            table_name: Table name
+            properties: Dict with 'table_description' (Optional[str]) and 'columns'
+                (Dict[str, str]), as returned by SchemaReader.get_extended_properties()
+
+        Returns:
+            SQL statements, or an empty string if the table has no descriptions
+        """
+        statements = []
+
+        table_description = properties.get('table_description')
+        if table_description:
+            statements.append(
+                "EXEC sys.sp_addextendedproperty @name=N'MS_Description', "
+                f"@value=N'{escape_sql_string(table_description)}', "
+                f"@level0type=N'SCHEMA', @level0name=N'{schema_name}', "
+                f"@level1type=N'TABLE', @level1name=N'{table_name}'\nGO\n"
+            )
+
+        for column_name, description in properties.get('columns', {}).items():
+            if not description:
+                continue
+            statements.append(
+                "EXEC sys.sp_addextendedproperty @name=N'MS_Description', "
+                f"@value=N'{escape_sql_string(description)}', "
+                f"@level0type=N'SCHEMA', @level0name=N'{schema_name}', "
+                f"@level1type=N'TABLE', @level1name=N'{table_name}', "
+                f"@level2type=N'COLUMN', @level2name=N'{column_name}'\nGO\n"
+            )
+
+        return '\n'.join(statements)
 
     def _format_data_type(self, col: ColumnInfo) -> str:
         """Format column data type.
@@ -350,6 +386,7 @@ GO
         schemas: List[SchemaInfo],
         sequences: List[Dict[str, Any]],
         tables: List[TableInfo],
+        extended_properties: Dict[Tuple[str, str], Dict[str, Any]],
         primary_keys: List[PrimaryKeyInfo],
         foreign_keys: List[ForeignKeyInfo],
         deferred_foreign_keys: List[ForeignKeyInfo],
@@ -368,6 +405,7 @@ GO
             schemas: List of schemas
             sequences: List of sequences
             tables: List of tables
+            extended_properties: Table/column descriptions keyed by (schema_name, table_name)
             primary_keys: List of primary keys
             foreign_keys: List of foreign keys
             deferred_foreign_keys: List of deferred foreign keys
@@ -403,6 +441,10 @@ GO
                 for table in tables:
                     f.write(self.format_table(table))
                     f.write("\n")
+                    props = extended_properties.get((table.schema_name, table.table_name))
+                    if props:
+                        f.write(self.format_extended_properties(table.schema_name, table.table_name, props))
+                        f.write("\n")
 
             if primary_keys:
                 f.write("-- PRIMARY KEYS\n\n")
@@ -477,6 +519,7 @@ GO
         schemas: List[SchemaInfo],
         sequences: List[Dict[str, Any]],
         tables: List[TableInfo],
+        extended_properties: Dict[Tuple[str, str], Dict[str, Any]],
         primary_keys: List[PrimaryKeyInfo],
         foreign_keys: List[ForeignKeyInfo],
         deferred_foreign_keys: List[ForeignKeyInfo],
@@ -495,6 +538,7 @@ GO
             schemas: List of schemas
             sequences: List of sequences
             tables: List of tables
+            extended_properties: Table/column descriptions keyed by (schema_name, table_name)
             primary_keys: List of primary keys
             foreign_keys: List of foreign keys
             deferred_foreign_keys: List of deferred foreign keys
@@ -523,7 +567,11 @@ GO
             write_object('Sequences', f"{seq['schema_name']}.{seq['sequence_name']}", self.format_sequence(seq))
 
         for table in tables:
-            write_object('Tables', f"{table.schema_name}.{table.table_name}", self.format_table(table))
+            table_sql = self.format_table(table)
+            props = extended_properties.get((table.schema_name, table.table_name))
+            if props:
+                table_sql += "\n" + self.format_extended_properties(table.schema_name, table.table_name, props)
+            write_object('Tables', f"{table.schema_name}.{table.table_name}", table_sql)
 
         for pk in primary_keys:
             write_object('Constraints', pk.constraint_name, self.format_primary_key(pk))
@@ -566,6 +614,7 @@ GO
         schemas: List[SchemaInfo],
         sequences: List[Dict[str, Any]],
         tables: List[TableInfo],
+        extended_properties: Dict[Tuple[str, str], Dict[str, Any]],
         primary_keys: List[PrimaryKeyInfo],
         foreign_keys: List[ForeignKeyInfo],
         deferred_foreign_keys: List[ForeignKeyInfo],
@@ -584,6 +633,7 @@ GO
             schemas: List of schemas
             sequences: List of sequences
             tables: List of tables
+            extended_properties: Table/column descriptions keyed by (schema_name, table_name)
             primary_keys: List of primary keys
             foreign_keys: List of foreign keys
             deferred_foreign_keys: List of deferred foreign keys
@@ -630,6 +680,10 @@ GO
                 for table in tables:
                     f.write(self.format_table(table))
                     f.write("\n")
+                    props = extended_properties.get((table.schema_name, table.table_name))
+                    if props:
+                        f.write(self.format_extended_properties(table.schema_name, table.table_name, props))
+                        f.write("\n")
             written_files.append(filename)
 
         # 04: Constraints (PK, FK, Unique, Check)

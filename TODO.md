@@ -235,10 +235,12 @@
 - [ ] Extract alias types
 - [ ] Extract CLR types (metadata only)
 
-### Extended Properties
-- [ ] Extract table descriptions
-- [ ] Extract column descriptions
-- [ ] Include as SQL comments in output
+### Extended Properties ✅
+- [x] Extract table descriptions (`src/schema.py: get_extended_properties`)
+- [x] Extract column descriptions
+- [x] Generate `EXEC sp_addextendedproperty` statements (not plain SQL comments — this
+      restores the descriptions as real MS_Description metadata on redeploy, visible in
+      SSMS; see 2026-09-19 update)
 
 ### Parallel Extraction (Optional)
 - [ ] Extract objects in parallel using threading/multiprocessing
@@ -246,7 +248,8 @@
 
 ### Testing
 - [x] Unit tests for sequence extraction (`tests/test_schema.py`, `tests/test_formatter.py`)
-- [ ] Unit tests for remaining advanced features (UDTs, extended properties, parallel extraction)
+- [x] Unit tests for extended properties (`tests/test_schema.py`, `tests/test_formatter.py`)
+- [ ] Unit tests for remaining advanced features (UDTs, parallel extraction)
 - [ ] Integration tests
 
 ---
@@ -412,6 +415,25 @@ Before releasing v1.0:
 
 ## Recent Updates
 
+### 2026-09-19: Extended Properties (Table/Column Descriptions)
+- **Added**: `SchemaReader.get_extended_properties()` in `src/schema.py`, querying
+  `sys.extended_properties` (`class = 1`, `name = 'MS_Description'`) joined to
+  `sys.tables`/`sys.columns`, grouped by `(schema_name, table_name)` into a dict with
+  `table_description` and a `columns` dict.
+- **Added**: `SQLFormatter.format_extended_properties()` — emits `EXEC sys.sp_addextendedproperty`
+  statements for the table description and each described column.
+- **Deviated from the original checklist wording** ("include as SQL comments"): plain
+  comments would be lost on redeploy. `sp_addextendedproperty` calls are still human-readable
+  in the generated SQL, but also restore the descriptions as real MS_Description metadata
+  (visible in SSMS) on the redeployed database, which is more useful for an extraction/
+  redeployment tool.
+- **Wired into**: all three output formats, written immediately after each table's
+  `CREATE TABLE` statement (single file: same TABLES section; per-object: appended to the
+  table's own file; modular: same `03_CREATE_TABLES.sql`). No new modular file and no
+  filename renumbering.
+- **Tests**: 2 new unit tests in `tests/test_schema.py`, 4 new in `tests/test_formatter.py`.
+  Full suite: 102 passed, 4 skipped (need real DB).
+
 ### 2026-09-19: Sequence Extraction
 - **Added**: `SchemaReader.get_sequences()` in `src/schema.py`, querying `sys.sequences`
   for START WITH, INCREMENT BY, MIN/MAX values, CYCLE, CACHE/NO CACHE, and data type
@@ -510,8 +532,8 @@ Before releasing v1.0:
 ---
 
 **Last Updated**: 2026-09-19
-**Status**: Phases 1, 2, 3, 5, 6 Complete; Phase 4 Mostly Complete; Phase 7 In Progress (sequences done)
+**Status**: Phases 1, 2, 3, 5, 6 Complete; Phase 4 Mostly Complete; Phase 7 In Progress (sequences + extended properties done)
 **Current Phase**: Remaining gaps: database-level DDL triggers + explicit trigger order
 (Phase 4, deliberately deferred — see 2026-09-19 update); Phase 6 integration/deploy tests
-still need a real DB; Phase 7 UDTs, extended properties, and parallel extraction not started.
+still need a real DB; Phase 7 UDTs and parallel extraction not started.
 **Estimated Completion**: Not re-estimated — verify remaining Phase 7-9 scope before committing to a timeline

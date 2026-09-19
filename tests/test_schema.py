@@ -303,6 +303,46 @@ class TestSchemaReader:
         assert "IN (?)" in call_args[0][0]
         assert call_args[0][1] == ("dbo",)
 
+    def test_get_extended_properties_groups_table_and_columns(self, mock_db_connection):
+        """Test that table-level and column-level descriptions are grouped correctly."""
+        mock_row1 = MagicMock()
+        mock_row1.schema_name = "dbo"
+        mock_row1.table_name = "Orders"
+        mock_row1.column_name = None
+        mock_row1.description = "Customer orders."
+
+        mock_row2 = MagicMock()
+        mock_row2.schema_name = "dbo"
+        mock_row2.table_name = "Orders"
+        mock_row2.column_name = "OrderID"
+        mock_row2.description = "Primary key."
+
+        mock_row3 = MagicMock()
+        mock_row3.schema_name = "dbo"
+        mock_row3.table_name = "Orders"
+        mock_row3.column_name = "Total"
+        mock_row3.description = "Order total in USD."
+
+        mock_db_connection.fetch_all.return_value = [mock_row1, mock_row2, mock_row3]
+
+        reader = SchemaReader(mock_db_connection)
+        properties = reader.get_extended_properties()
+
+        entry = properties[("dbo", "Orders")]
+        assert entry['table_description'] == "Customer orders."
+        assert entry['columns'] == {"OrderID": "Primary key.", "Total": "Order total in USD."}
+
+    def test_get_extended_properties_with_filter(self, mock_db_connection):
+        """Test getting extended properties with schema filter."""
+        mock_db_connection.fetch_all.return_value = []
+
+        reader = SchemaReader(mock_db_connection)
+        reader.get_extended_properties(schema_filter=["dbo"])
+
+        call_args = mock_db_connection.fetch_all.call_args
+        assert "IN (?)" in call_args[0][0]
+        assert call_args[0][1] == ("dbo",)
+
     def test_get_views_no_filter(self, mock_db_connection):
         """Test getting all views."""
         mock_view1 = MagicMock()

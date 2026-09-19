@@ -68,6 +68,40 @@ class TestSQLFormatter:
         assert "CYCLE" in sql and "NO CYCLE" not in sql
         assert "NO CACHE" in sql
 
+    def test_format_extended_properties_table_and_columns(self):
+        """Test formatting sp_addextendedproperty statements for a table and its columns."""
+        formatter = SQLFormatter("/tmp/test")
+
+        properties = {
+            'table_description': "Customer orders.",
+            'columns': {"OrderID": "Primary key.", "Notes": None}
+        }
+
+        sql = formatter.format_extended_properties("dbo", "Orders", properties)
+
+        assert "@level1type=N'TABLE', @level1name=N'Orders'" in sql
+        assert "@value=N'Customer orders.'" in sql
+        assert "@level2type=N'COLUMN', @level2name=N'OrderID'" in sql
+        assert "@value=N'Primary key.'" in sql
+        assert "Notes" not in sql  # No description -> not emitted
+
+    def test_format_extended_properties_empty(self):
+        """Test formatting extended properties for a table with no descriptions."""
+        formatter = SQLFormatter("/tmp/test")
+
+        sql = formatter.format_extended_properties("dbo", "Orders", {'table_description': None, 'columns': {}})
+
+        assert sql == ""
+
+    def test_format_extended_properties_escapes_quotes(self):
+        """Test that single quotes in descriptions are escaped for the SQL string literal."""
+        formatter = SQLFormatter("/tmp/test")
+
+        properties = {'table_description': "Customer's orders.", 'columns': {}}
+        sql = formatter.format_extended_properties("dbo", "Orders", properties)
+
+        assert "Customer''s orders." in sql
+
     def test_format_table(self):
         """Test formatting table CREATE statement."""
         formatter = SQLFormatter("/tmp/test")
@@ -205,7 +239,8 @@ class TestSQLFormatter:
             table = TableInfo(schema_name="dbo", table_name="Config", columns=[col])
 
             formatter.write_modular_format(
-                schemas=[], sequences=[], tables=[table], primary_keys=[], foreign_keys=[],
+                schemas=[], sequences=[], tables=[table], extended_properties={},
+                primary_keys=[], foreign_keys=[],
                 deferred_foreign_keys=[], unique_constraints=[], check_constraints=[],
                 indexes=[], views=[], procedures=[], functions=[], triggers=[],
                 seed_data=[]
@@ -225,6 +260,34 @@ class TestSQLFormatter:
             assert '03_CREATE_TABLES.sql' in ps1_content
             assert '01_CREATE_SCHEMAS.sql' not in ps1_content
             assert 'sqlcmd' in ps1_content
+
+    def test_write_modular_format_includes_extended_properties(self):
+        """Test that table/column descriptions are written into the tables file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            formatter = SQLFormatter(tmpdir)
+
+            col = ColumnInfo(
+                name="ID", data_type="int", max_length=None, precision=None, scale=None,
+                is_nullable=False, is_identity=True, is_computed=False,
+                default_value=None, computed_definition=None
+            )
+            table = TableInfo(schema_name="dbo", table_name="Config", columns=[col])
+            extended_properties = {
+                ("dbo", "Config"): {'table_description': "App configuration.", 'columns': {"ID": "Row identifier."}}
+            }
+
+            formatter.write_modular_format(
+                schemas=[], sequences=[], tables=[table], extended_properties=extended_properties,
+                primary_keys=[], foreign_keys=[],
+                deferred_foreign_keys=[], unique_constraints=[], check_constraints=[],
+                indexes=[], views=[], procedures=[], functions=[], triggers=[],
+                seed_data=[]
+            )
+
+            content = Path(tmpdir, '03_CREATE_TABLES.sql').read_text(encoding='utf-8')
+            assert "sp_addextendedproperty" in content
+            assert "App configuration." in content
+            assert "Row identifier." in content
 
     def test_write_readme_modular(self):
         """Test README generation for modular format lists objects and deploy instructions."""

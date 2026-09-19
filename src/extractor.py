@@ -78,6 +78,10 @@ class DatabaseExtractor:
             logger.info("Extracting tables...")
             tables = schema_reader.get_tables(schema_filter)
 
+            # Extract extended properties (table/column descriptions)
+            logger.info("Extracting extended properties...")
+            extended_properties = schema_reader.get_extended_properties(schema_filter)
+
             # Extract constraints
             logger.info("Extracting constraints...")
             primary_keys = constraint_extractor.get_primary_keys(schema_filter)
@@ -168,6 +172,7 @@ class DatabaseExtractor:
                     schemas=schemas,
                     sequences=sequences,
                     tables=ordered_tables,
+                    extended_properties=extended_properties,
                     primary_keys=primary_keys,
                     foreign_keys=foreign_keys,
                     deferred_foreign_keys=deferred_fks,
@@ -185,6 +190,7 @@ class DatabaseExtractor:
                     schemas=schemas,
                     sequences=sequences,
                     tables=ordered_tables,
+                    extended_properties=extended_properties,
                     primary_keys=primary_keys,
                     foreign_keys=foreign_keys,
                     deferred_foreign_keys=deferred_fks,
@@ -202,6 +208,7 @@ class DatabaseExtractor:
                     schemas=schemas,
                     sequences=sequences,
                     tables=ordered_tables,
+                    extended_properties=extended_properties,
                     primary_keys=primary_keys,
                     foreign_keys=foreign_keys,
                     deferred_foreign_keys=deferred_fks,

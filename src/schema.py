@@ -379,6 +379,53 @@ class SchemaReader:
         logger.info(f"Found {len(triggers)} triggers")
         return triggers
 
+    def get_extended_properties(self, schema_filter: Optional[List[str]] = None) -> Dict[Tuple[str, str], Dict[str, Any]]:
+        """Get MS_Description extended properties (descriptions) for tables and columns.
+
+        Args:
+            schema_filter: Optional list of schema names to include
+
+        Returns:
+            Dict keyed by (schema_name, table_name), each value a dict with
+            'table_description' (Optional[str]) and 'columns' (Dict[str, str]
+            mapping column name to description)
+        """
+        query = """
+        SELECT
+            s.name AS schema_name,
+            t.name AS table_name,
+            c.name AS column_name,
+            CAST(ep.value AS nvarchar(max)) AS description
+        FROM sys.extended_properties ep
+        INNER JOIN sys.tables t ON ep.major_id = t.object_id
+        INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+        LEFT JOIN sys.columns c ON ep.major_id = c.object_id AND ep.minor_id = c.column_id
+        WHERE ep.class = 1 AND ep.name = 'MS_Description' AND t.is_ms_shipped = 0
+        """
+
+        if schema_filter:
+            placeholders = ','.join(['?' for _ in schema_filter])
+            query += f" AND s.name IN ({placeholders})"
+            results = self.connection.fetch_all(query, tuple(schema_filter))
+        else:
+            results = self.connection.fetch_all(query)
+
+        properties: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        for row in results:
+            key = (row.schema_name, row.table_name)
+            entry = properties.setdefault(key, {'table_description': None, 'columns': {}})
+            if row.column_name is None:
+                entry['table_description'] = row.description
+            else:
+                entry['columns'][row.column_name] = row.description
+
+        count = sum(
+            (1 if v['table_description'] else 0) + len(v['columns'])
+            for v in properties.values()
+        )
+        logger.info(f"Found {count} extended properties (descriptions)")
+        return properties
+
     def get_stored_procedures(self, schema_filter: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """Get all stored procedures from database.
 
