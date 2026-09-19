@@ -29,6 +29,7 @@ logger = get_logger(__name__)
 @click.option('--output', '-o', default='./output', help='Output directory (default: ./output)')
 @click.option('--format', 'output_format', type=click.Choice(['single', 'per-object', 'modular']), default='modular', help='Output format (default: modular)')
 @click.option('--clean', is_flag=True, help='Delete the output directory before extraction')
+@click.option('--dry-run', is_flag=True, help='Connect and report what would be extracted, without writing any output files')
 @click.option('--omit-ts', is_flag=True, help='Omit the generation timestamp from output headers')
 @click.option('--no-header', is_flag=True, help='Omit the header comment block from output files entirely')
 @click.option('--schemas', help='Comma-separated list of schemas to extract')
@@ -52,6 +53,7 @@ def _run(
     output: str,
     output_format: str,
     clean: bool,
+    dry_run: bool,
     omit_ts: bool,
     no_header: bool,
     schemas: str,
@@ -138,7 +140,7 @@ def _run(
 
         # Create extractor and run
         extractor = DatabaseExtractor(config)
-        extractor.extract(
+        summary = extractor.extract(
             output_dir=output,
             schema_filter=schema_filter,
             extract_seed_data=seed_data,
@@ -150,10 +152,16 @@ def _run(
             no_header=no_header,
             parallel=not no_parallel,
             max_workers=max_workers,
-            show_progress=not quiet
+            show_progress=not quiet,
+            dry_run=dry_run
         )
 
-        click.echo(f"\n✓ Extraction complete! SQL scripts written to: {output}")
+        if dry_run:
+            click.echo("\n✓ Dry run complete - no files were written. Would extract:")
+            for key, count in summary.items():
+                click.echo(f"  {key}: {count}")
+        else:
+            click.echo(f"\n✓ Extraction complete! SQL scripts written to: {output}")
         sys.exit(0)
 
     except AuthenticationError as e:

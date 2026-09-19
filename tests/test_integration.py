@@ -199,6 +199,90 @@ class TestFullRoundTrip:
         assert after is not None
 
 
+@requires_real_server
+class TestDryRunAgainstRealDb:
+    """--dry-run must report real object counts from a live database without ever
+    creating the output directory."""
+
+    @pytest.fixture(scope="class")
+    def source_db(self):
+        db_name = "SQLExtractIntegrationTest_DryRun"
+        _recreate_database(db_name)
+        _run_sqlcmd_file(db_name, FIXTURE_PATH)
+        yield db_name
+        _drop_database(db_name)
+
+    def test_dry_run_reports_real_counts_and_writes_nothing(self, source_db, tmp_path):
+        output_dir = tmp_path / "should_not_exist"
+        extractor = DatabaseExtractor(_admin_config(source_db))
+
+        summary = extractor.extract(
+            output_dir=str(output_dir),
+            extract_seed_data=True,
+            dry_run=True,
+        )
+
+        assert not output_dir.exists()
+        assert summary["tables"] == 6
+        assert summary["views"] == 1
+        assert summary["procedures"] == 1
+        assert summary["functions"] == 2
+        assert summary["triggers"] == 1
+        assert summary["seed_data_tables"] == 6
+
+
+@requires_real_server
+class TestCliFlagsAgainstRealDb:
+    """Exercises --omit-ts, --no-header, --clean, and --no-parallel against a real
+    database - these flags only change formatting/output-directory handling, not the
+    query logic already covered by TestFullRoundTrip, so one small fixture schema and
+    the modular format are enough to prove each flag actually does what it claims."""
+
+    @pytest.fixture(scope="class")
+    def source_db(self):
+        db_name = "SQLExtractIntegrationTest_CliFlags"
+        _recreate_database(db_name)
+        _run_sqlcmd_file(db_name, FIXTURE_PATH)
+        yield db_name
+        _drop_database(db_name)
+
+    def test_omit_ts_removes_date_line_but_keeps_header(self, source_db, tmp_path):
+        extractor = DatabaseExtractor(_admin_config(source_db))
+        extractor.extract(output_dir=str(tmp_path), omit_ts=True)
+
+        content = (tmp_path / "01_CREATE_SCHEMAS.sql").read_text()
+        assert "Database Schema Export" in content
+        assert "Date:" not in content
+
+    def test_no_header_omits_header_block_entirely(self, source_db, tmp_path):
+        extractor = DatabaseExtractor(_admin_config(source_db))
+        extractor.extract(output_dir=str(tmp_path), no_header=True)
+
+        content = (tmp_path / "01_CREATE_SCHEMAS.sql").read_text()
+        assert "Database Schema Export" not in content
+        assert "/*" not in content
+        assert "-- SCHEMAS" in content
+
+    def test_clean_removes_stray_files_from_output_dir(self, source_db, tmp_path):
+        stray_file = tmp_path / "leftover_from_a_previous_run.txt"
+        stray_file.write_text("stale")
+
+        extractor = DatabaseExtractor(_admin_config(source_db))
+        extractor.extract(output_dir=str(tmp_path), clean=True)
+
+        assert not stray_file.exists()
+        assert (tmp_path / "01_CREATE_SCHEMAS.sql").exists()
+
+    def test_no_parallel_produces_the_same_object_counts(self, source_db, tmp_path):
+        extractor = DatabaseExtractor(_admin_config(source_db))
+        extractor.extract(output_dir=str(tmp_path), extract_seed_data=True, parallel=False)
+
+        assert (tmp_path / "04_CREATE_TABLES.sql").exists()
+        assert (tmp_path / "12_SEED_DATA.sql").exists()
+        readme = (tmp_path / "README.md").read_text()
+        assert "- Tables: 6" in readme
+
+
 @pytest.mark.unit
 class TestMockIntegration:
     """Mock integration tests that don't require real database."""

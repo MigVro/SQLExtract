@@ -166,3 +166,72 @@ class TestExtractErrorMapping:
         with patch('src.extractor.SQLFormatter.__init__', side_effect=OSError("permission denied")):
             with pytest.raises(OutputError, match="permission denied"):
                 extractor.extract(output_dir=str(tmp_path))
+
+
+class TestClean:
+    """clean=True must leave a directory in place for the formatter to write into -
+    previously it deleted output_dir via shutil.rmtree and never recreated it, so any
+    real extraction with --clean crashed with FileNotFoundError."""
+
+    def test_clean_recreates_output_dir_before_writing(self, tmp_path):
+        config = ConnectionConfig(server="localhost", database="TestDB", user="sa", password="TestPass")
+        extractor = DatabaseExtractor(config)
+        output_dir = tmp_path / "out"
+        output_dir.mkdir()
+        (output_dir / "stale_file.sql").write_text("-- stale")
+
+        with patch('src.extractor.DatabaseConnection', FakeConnection):
+            with patch.object(extractor, '_run_jobs', return_value=EMPTY_METADATA_RESULTS):
+                extractor.extract(output_dir=str(output_dir), clean=True)
+
+        assert not (output_dir / "stale_file.sql").exists()
+        assert (output_dir / "README.md").exists()
+
+
+class TestDryRun:
+    """Test that dry_run=True reports object counts without touching the output directory."""
+
+    def test_dry_run_returns_summary_without_writing_files(self, tmp_path):
+        config = ConnectionConfig(server="localhost", database="TestDB", user="sa", password="TestPass")
+        extractor = DatabaseExtractor(config)
+        output_dir = tmp_path / "should_not_exist"
+
+        with patch('src.extractor.DatabaseConnection', FakeConnection):
+            with patch.object(extractor, '_run_jobs', return_value=EMPTY_METADATA_RESULTS):
+                with patch('src.extractor.SQLFormatter') as MockFormatter:
+                    summary = extractor.extract(output_dir=str(output_dir), dry_run=True)
+
+        MockFormatter.assert_not_called()
+        assert not output_dir.exists()
+        assert summary == {
+            'schemas': 0,
+            'user_defined_types': 0,
+            'sequences': 0,
+            'tables': 0,
+            'primary_keys': 0,
+            'foreign_keys': 0,
+            'unique_constraints': 0,
+            'check_constraints': 0,
+            'indexes': 0,
+            'views': 0,
+            'procedures': 0,
+            'functions': 0,
+            'triggers': 0,
+            'seed_data_tables': 0,
+        }
+
+    def test_dry_run_does_not_pull_seed_data_rows(self, tmp_path):
+        """dry_run must count the tables that would be extracted without calling
+        SeedDataExtractor - pulling every row would defeat the point of a cheap dry run."""
+        config = ConnectionConfig(server="localhost", database="TestDB", user="sa", password="TestPass")
+        extractor = DatabaseExtractor(config)
+
+        with patch('src.extractor.DatabaseConnection', FakeConnection):
+            with patch.object(extractor, '_run_jobs', return_value=EMPTY_METADATA_RESULTS):
+                with patch('src.extractor.SeedDataExtractor') as MockSeedExtractor:
+                    summary = extractor.extract(
+                        output_dir=str(tmp_path / "out"), dry_run=True, extract_seed_data=True
+                    )
+
+        MockSeedExtractor.assert_not_called()
+        assert summary['seed_data_tables'] == 0

@@ -97,8 +97,9 @@ class DatabaseExtractor:
         no_header: bool = False,
         parallel: bool = True,
         max_workers: int = 8,
-        show_progress: bool = True
-    ) -> None:
+        show_progress: bool = True,
+        dry_run: bool = False
+    ) -> Optional[Dict[str, int]]:
         """Extract database schema and data.
 
         Args:
@@ -115,12 +116,20 @@ class DatabaseExtractor:
                 each on its own database connection
             max_workers: Maximum number of concurrent connections when parallel is True
             show_progress: Display a progress bar for metadata/seed-data extraction
+            dry_run: Connect and gather metadata (validating connectivity/permissions and
+                counting objects) without writing any output files or reading seed data
+                rows. Returns a summary dict of object counts instead of None.
+
+        Returns:
+            A summary dict of object counts if dry_run is True, otherwise None.
         """
-        try:
-            formatter = SQLFormatter(output_dir, omit_ts=omit_ts, no_header=no_header, trust_cert=self.config.trust_cert)
-        except OSError as e:
-            logger.error(f"Failed to prepare output directory: {e}")
-            raise OutputError(f"Failed to prepare output directory: {e}")
+        formatter = None
+        if not dry_run:
+            try:
+                formatter = SQLFormatter(output_dir, omit_ts=omit_ts, no_header=no_header, trust_cert=self.config.trust_cert)
+            except OSError as e:
+                logger.error(f"Failed to prepare output directory: {e}")
+                raise OutputError(f"Failed to prepare output directory: {e}")
 
         try:
             progress = create_progress() if show_progress else None
@@ -217,26 +226,52 @@ class DatabaseExtractor:
                         # Extract from all tables
                         data_tables = ordered_tables
 
-                    logger.info(f"Extracting seed data from {len(data_tables)} table(s)...")
-                    seed_jobs: Dict[str, Callable[[DatabaseConnection], List[str]]] = {
-                        f"{table.schema_name}.{table.table_name}": (
-                            lambda conn, t=table: SeedDataExtractor(conn).extract_table_data(
-                                t.schema_name, t.table_name, t.columns, max_rows=max_rows
+                    if dry_run:
+                        # Report which tables would be extracted without pulling any rows
+                        logger.info(f"Would extract seed data from {len(data_tables)} table(s)")
+                    else:
+                        logger.info(f"Extracting seed data from {len(data_tables)} table(s)...")
+                        seed_jobs: Dict[str, Callable[[DatabaseConnection], List[str]]] = {
+                            f"{table.schema_name}.{table.table_name}": (
+                                lambda conn, t=table: SeedDataExtractor(conn).extract_table_data(
+                                    t.schema_name, t.table_name, t.columns, max_rows=max_rows
+                                )
                             )
+                            for table in data_tables
+                        }
+                        seed_results = self._run_jobs(
+                            seed_jobs, parallel=parallel, max_workers=max_workers,
+                            progress=progress, task_description="Extracting seed data"
                         )
-                        for table in data_tables
-                    }
-                    seed_results = self._run_jobs(
-                        seed_jobs, parallel=parallel, max_workers=max_workers,
-                        progress=progress, task_description="Extracting seed data"
-                    )
 
-                    # Reassemble in dependency order (not completion order)
-                    for table in data_tables:
-                        key = f"{table.schema_name}.{table.table_name}"
-                        table_data = seed_results[key]
-                        seed_data.extend(table_data)
-                        seed_data_by_table[key] = table_data
+                        # Reassemble in dependency order (not completion order)
+                        for table in data_tables:
+                            key = f"{table.schema_name}.{table.table_name}"
+                            table_data = seed_results[key]
+                            seed_data.extend(table_data)
+                            seed_data_by_table[key] = table_data
+                else:
+                    data_tables = []
+
+                if dry_run:
+                    summary = {
+                        'schemas': len(schemas),
+                        'user_defined_types': len(user_defined_types),
+                        'sequences': len(sequences),
+                        'tables': len(tables),
+                        'primary_keys': len(primary_keys),
+                        'foreign_keys': len(foreign_keys),
+                        'unique_constraints': len(unique_constraints),
+                        'check_constraints': len(check_constraints),
+                        'indexes': len(indexes),
+                        'views': len(views),
+                        'procedures': len(procedures),
+                        'functions': len(functions),
+                        'triggers': len(triggers),
+                        'seed_data_tables': len(data_tables),
+                    }
+                    logger.info(f"Dry run complete: {summary}")
+                    return summary
 
             except SQLExtractError:
                 raise
@@ -252,6 +287,7 @@ class DatabaseExtractor:
                 if clean and os.path.exists(output_dir):
                     logger.info(f"Cleaning output directory: {output_dir}")
                     shutil.rmtree(output_dir)
+                    os.makedirs(output_dir, exist_ok=True)
 
                 logger.info("Generating SQL scripts...")
                 if output_format == 'single':

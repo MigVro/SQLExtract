@@ -67,6 +67,22 @@ def test_invalid_numeric_argument_exits_5(extra_args):
     assert result.exit_code == 5
 
 
+def test_dry_run_exits_0_without_writing_output(tmp_path):
+    """--dry-run prints the summary extract() returns and never claims files were written."""
+    runner = CliRunner()
+    output_dir = tmp_path / "should_not_exist"
+    summary = {'schemas': 2, 'tables': 5, 'seed_data_tables': 0}
+    with patch('src.cli.DatabaseExtractor') as MockExtractor:
+        MockExtractor.return_value.extract.return_value = summary
+        result = runner.invoke(_run, BASE_ARGS + ['--output', str(output_dir), '--dry-run'])
+    assert result.exit_code == 0
+    assert not output_dir.exists()
+    assert "Dry run complete" in result.output
+    assert "tables: 5" in result.output
+    _, kwargs = MockExtractor.return_value.extract.call_args
+    assert kwargs['dry_run'] is True
+
+
 def test_click_usage_error_remapped_to_5(monkeypatch):
     """Click's own argument validation (e.g. missing --server/--database) normally
     exits with Click's default code 2 - the main() wrapper remaps that to 5."""

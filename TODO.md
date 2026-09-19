@@ -270,7 +270,7 @@
 
 ---
 
-## Phase 8: Error Handling and Polish (Week 8) - CLOSED (scoped items below deferred)
+## Phase 8: Error Handling and Polish (Week 8) - COMPLETE (multi-version/cross-platform testing still deferred — see 2026-09-19 update)
 
 ### Error Handling
 - [x] Connection error handling with retries (`src/connection.py:DatabaseConnection.connect`,
@@ -287,7 +287,11 @@
       `--tables`/`--schemas` format is deliberately left as warn-and-skip at runtime
       (not upfront validation) — an invalid entry there is dropped with a warning,
       not a hard failure (explicit decision, not an oversight)
-- [ ] SQL syntax validation (dry-run mode) — deferred (see 2026-09-19 close-out note)
+- [x] SQL syntax validation (dry-run mode) — `--dry-run` (CLI) / `dry_run=True`
+      (`DatabaseExtractor.extract()`) connects, runs the same metadata queries as a
+      real extraction, and reports object counts (schemas, tables, views, procedures,
+      functions, triggers, indexes, constraints, and how many tables seed data would be
+      pulled from) without writing any output files or reading seed-data rows
 - [x] Detailed error messages with troubleshooting hints — each `except` branch in
       `src/cli.py`'s `_run()` prints a one-line `Hint:` tailored to that exit code
       (e.g. check firewall/port for connection errors, check credentials for auth
@@ -311,19 +315,32 @@
       write error — matches the scheme in CLAUDE.md)
 
 ### Documentation
-- [ ] Complete README.md — deferred (see 2026-09-19 close-out note)
-- [ ] Add usage examples — deferred
-- [ ] Add troubleshooting section — deferred
-- [ ] Add FAQ — deferred
+- [x] Complete README.md — rewritten to match the actual CLI (previous version documented
+      several flags that were never implemented, e.g. `--objects`, `--exclude`, `--pattern`,
+      `--script-drops`, `--dependency-graph`; see 2026-09-19 update)
+- [x] Add usage examples — Quick Start and Use Cases sections cover SQL/Windows auth,
+      Azure SQL, schema/table filtering, `--dry-run`, and a CI/CD snippet
+- [x] Add troubleshooting section — connection/auth/database-not-found/certificate causes,
+      beyond the one-line `Hint:` text already in the CLI itself
+- [x] Add FAQ — scope boundaries (no MySQL/Postgres, no permissions extraction), circular
+      FK handling, `--omit-ts` for diff-friendly re-extraction, current testing coverage
 
 ### Testing
-- [ ] Test all error scenarios — deferred (unit-level exit-code mapping is covered by
-      `tests/test_cli.py`; this item is about broader manual/scenario coverage)
-- [ ] Test all CLI flags and options — deferred
+- [x] Test all error scenarios — exit-code mapping covered at unit level
+      (`tests/test_cli.py`); connection/auth/database-not-found scenarios additionally
+      verified manually against a real SQL Server 2017 instance during this pass
+- [x] Test all CLI flags and options — `--dry-run`, `--clean`, `--omit-ts`, `--no-header`,
+      and `--no-parallel` are now exercised against a real database
+      (`tests/test_integration.py:TestCliFlagsAgainstRealDb`, `TestDryRunAgainstRealDb`),
+      in addition to the existing per-format round-trip coverage in `TestFullRoundTrip`.
+      Found and fixed a real bug in the process: `--clean` deleted the output directory
+      via `shutil.rmtree` but never recreated it, so any real extraction using `--clean`
+      crashed with `FileNotFoundError` (`src/extractor.py`, see 2026-09-19 update)
 - [ ] Test on different SQL Server versions (2012, 2016, 2019, 2022) — deferred, needs
-      real instances of each version
+      real instances of each version (only SQL Server 2017 is available in this environment)
 - [ ] Test on Azure SQL Database — deferred, needs a real Azure SQL instance
 - [ ] Test on Windows, Linux, macOS — deferred, needs real machines/CI per platform
+      (only Windows is available in this environment)
 
 ---
 
@@ -453,6 +470,40 @@ Before releasing v1.0:
 ---
 
 ## Recent Updates
+
+### 2026-09-19: Phase 8 Reopened and Completed
+- A local SQL Server 2017 instance (Windows Auth) became available in
+  this environment, so the items deferred in "Phase 8 Closed" below for lack of real-DB
+  access could actually be built and verified rather than deferred further.
+- **Added**: `--dry-run` (CLI) / `dry_run=True` (`DatabaseExtractor.extract()`) — connects,
+  runs the same metadata queries as a real extraction, and returns/prints object counts
+  without writing any output files or reading seed-data rows (deliberately skips pulling
+  seed data, not just skips the file write, so it stays cheap against large tables).
+- **Rewrote README.md**: it had drifted badly from the actual CLI — it documented flags
+  that were never implemented (`--objects`, `--exclude`, `--pattern`, `--exclude-tables`,
+  `--where`, `--script-drops`, `--script-permissions`, `--include-comments`,
+  `--no-identity-insert`, `--batch-separator`, `--dependency-graph`, `--compare-with`,
+  `--encrypt-passwords`, a standalone `--parallel` flag), claimed a `SQLAlchemy` dependency
+  that doesn't exist, and showed a fabricated demo transcript and a batched multi-row
+  `INSERT` sample that doesn't match `src/seed_data.py` (one `INSERT` per row, no
+  batching). Replaced with an accurate Command Reference, a real demo transcript, a
+  corrected seed-data sample, a Troubleshooting section, and a FAQ.
+- **Found and fixed a real bug** while writing integration tests for `--clean`: it deleted
+  the output directory via `shutil.rmtree` but never recreated it before the formatter
+  tried to write into it, so any real extraction using `--clean` crashed with
+  `FileNotFoundError`. This had no test coverage before now — `SQLFormatter.__init__`
+  creates the directory once at construction time, then `--clean` deletes it out from
+  under the formatter later in the same `extract()` call. Fixed in `src/extractor.py` by
+  recreating the directory immediately after the `rmtree`.
+- **Tests**: `tests/test_extractor.py::TestDryRun` (2), `TestClean` (1, regression-guards
+  the bug above with mocks, no DB needed); `tests/test_integration.py` gained
+  `TestDryRunAgainstRealDb` and `TestCliFlagsAgainstRealDb` (`--omit-ts`, `--no-header`,
+  `--clean`, `--no-parallel`), all run against the real instance. Full suite: 154 passed,
+  2 skipped (need real DB — CI has none) with `SQLEXTRACT_TEST_SERVER` unset; 154 passed,
+  2 skipped (single/per-object file-listing checks only apply to modular) with it set.
+- **Still deferred** (genuinely blocked by infrastructure, not decision): testing against
+  SQL Server 2012/2016/2019/2022, Azure SQL Database/Managed Instance, and non-Windows
+  platforms — this environment has one SQL Server 2017 instance and one Windows machine.
 
 ### 2026-09-19: Phase 8 Closed
 - **Done**: error handling (connection/permission/database-access mapping, numeric
@@ -587,7 +638,7 @@ Before releasing v1.0:
   `test_extract_bit_column_uses_1_0_not_python_bool` in `tests/test_seed_data.py`, plus the
   corrected `test_get_table_columns_nvarchar_max` assertion), and 10 new integration tests
   (3 output formats × 3 checks + 1 modular-only file-listing check). Full unit suite: 117
-  passed. Integration suite: 10 passed against `(local)\MSSQL2017`.
+  passed. Integration suite: 10 passed against a local SQL Server 2017 instance.
 
 ### 2026-09-19: User-Defined Types and Parallel Extraction (Phase 7 complete)
 - **Added**: `SchemaReader.get_user_defined_types()` in `src/schema.py`, covering three
@@ -743,16 +794,17 @@ Before releasing v1.0:
 ---
 
 **Last Updated**: 2026-09-19
-**Status**: Phases 1, 2, 3, 5, 6, 7, 8 Complete (Phase 8 closed with known deferrals);
-Phase 4 Mostly Complete
+**Status**: Phases 1, 2, 3, 5, 6, 7, 8 Complete; Phase 4 Mostly Complete
 **Current Phase**: Remaining gaps: procedure parameter parsing, procedure dependency
 ordering, CLR function metadata, database-level DDL triggers + explicit trigger order
 (Phase 4, deliberately deferred — see 2026-09-19 update). Phase 6 and Phase 4's integration
 tests are now done against a real DB (see 2026-09-19 update); Phase 7's parallel-extraction
 speedup is still unbenchmarked (needs a real DB with meaningful network/query latency).
-Phase 8 (error handling/polish) is closed: exit codes, permission/database-access error
-mapping, progress bars, numeric argument validation, and troubleshooting hints are done;
-dry-run mode, README/docs, and cross-platform/multi-version testing are explicitly
-deferred, not started (see 2026-09-19 close-out note). Phase 9 (packaging/distribution)
-not started.
-**Estimated Completion**: Not re-estimated — verify remaining Phase 8-9 scope before committing to a timeline
+Phase 8 (error handling/polish) is complete: exit codes, permission/database-access error
+mapping, progress bars, numeric argument validation, troubleshooting hints, `--dry-run`,
+and README/docs (usage examples, troubleshooting section, FAQ) are all done, verified
+against a real SQL Server 2017 instance (see 2026-09-19 "Reopened and Completed" update).
+Only multi-version SQL Server testing (2012/2016/2019/2022), Azure SQL, and non-Windows
+platform testing remain deferred — genuinely blocked by the infrastructure available in
+this environment, not a scoping decision. Phase 9 (packaging/distribution) not started.
+**Estimated Completion**: Not re-estimated — verify remaining Phase 9 scope before committing to a timeline
