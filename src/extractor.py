@@ -1,5 +1,7 @@
 """Main extraction orchestration module."""
 
+import os
+import shutil
 from typing import List, Optional, Dict, Any
 from .connection import DatabaseConnection, ConnectionConfig
 from .schema import SchemaReader
@@ -32,7 +34,8 @@ class DatabaseExtractor:
         extract_seed_data: bool = False,
         seed_tables: Optional[List[str]] = None,
         max_rows: Optional[int] = None,
-        output_format: str = 'modular'
+        output_format: str = 'modular',
+        clean: bool = False
     ) -> None:
         """Extract database schema and data.
 
@@ -43,8 +46,13 @@ class DatabaseExtractor:
             seed_tables: Optional list of tables for seed data (format: schema.table)
             max_rows: Maximum rows per table for seed data
             output_format: Output format - 'single', 'per-object', or 'modular'
+            clean: Delete the output directory before extraction
         """
         try:
+            if clean and os.path.exists(output_dir):
+                logger.info(f"Cleaning output directory: {output_dir}")
+                shutil.rmtree(output_dir)
+
             # Connect to database
             logger.info("Connecting to database...")
             self.connection = DatabaseConnection(self.config)

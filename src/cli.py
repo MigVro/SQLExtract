@@ -19,6 +19,7 @@ logger = get_logger(__name__)
 @click.option('--trust-cert', is_flag=True, help='Trust server certificate (for Azure SQL)')
 @click.option('--output', '-o', default='./output', help='Output directory (default: ./output)')
 @click.option('--format', 'output_format', type=click.Choice(['single', 'per-object', 'modular']), default='modular', help='Output format (default: modular)')
+@click.option('--clean', is_flag=True, help='Delete the output directory before extraction')
 @click.option('--schemas', help='Comma-separated list of schemas to extract')
 @click.option('--seed-data', is_flag=True, help='Extract seed data from tables')
 @click.option('--tables', help='Comma-separated list of tables for seed data (format: schema.table)')
@@ -37,6 +38,7 @@ def main(
     trust_cert: bool,
     output: str,
     output_format: str,
+    clean: bool,
     schemas: str,
     seed_data: bool,
     tables: str,
@@ -113,7 +115,8 @@ def main(
             extract_seed_data=seed_data,
             seed_tables=seed_tables,
             max_rows=max_rows,
-            output_format=output_format
+            output_format=output_format,
+            clean=clean
         )
 
         click.echo(f"\n✓ Extraction complete! SQL scripts written to: {output}")
