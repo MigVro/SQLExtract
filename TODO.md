@@ -270,7 +270,7 @@
 
 ---
 
-## Phase 8: Error Handling and Polish (Week 8)
+## Phase 8: Error Handling and Polish (Week 8) - CLOSED (scoped items below deferred)
 
 ### Error Handling
 - [x] Connection error handling with retries (`src/connection.py:DatabaseConnection.connect`,
@@ -287,7 +287,7 @@
       `--tables`/`--schemas` format is deliberately left as warn-and-skip at runtime
       (not upfront validation) — an invalid entry there is dropped with a warning,
       not a hard failure (explicit decision, not an oversight)
-- [ ] SQL syntax validation (dry-run mode)
+- [ ] SQL syntax validation (dry-run mode) — deferred (see 2026-09-19 close-out note)
 - [x] Detailed error messages with troubleshooting hints — each `except` branch in
       `src/cli.py`'s `_run()` prints a one-line `Hint:` tailored to that exit code
       (e.g. check firewall/port for connection errors, check credentials for auth
@@ -311,17 +311,19 @@
       write error — matches the scheme in CLAUDE.md)
 
 ### Documentation
-- [ ] Complete README.md
-- [ ] Add usage examples
-- [ ] Add troubleshooting section
-- [ ] Add FAQ
+- [ ] Complete README.md — deferred (see 2026-09-19 close-out note)
+- [ ] Add usage examples — deferred
+- [ ] Add troubleshooting section — deferred
+- [ ] Add FAQ — deferred
 
 ### Testing
-- [ ] Test all error scenarios
-- [ ] Test all CLI flags and options
-- [ ] Test on different SQL Server versions (2012, 2016, 2019, 2022)
-- [ ] Test on Azure SQL Database
-- [ ] Test on Windows, Linux, macOS
+- [ ] Test all error scenarios — deferred (unit-level exit-code mapping is covered by
+      `tests/test_cli.py`; this item is about broader manual/scenario coverage)
+- [ ] Test all CLI flags and options — deferred
+- [ ] Test on different SQL Server versions (2012, 2016, 2019, 2022) — deferred, needs
+      real instances of each version
+- [ ] Test on Azure SQL Database — deferred, needs a real Azure SQL instance
+- [ ] Test on Windows, Linux, macOS — deferred, needs real machines/CI per platform
 
 ---
 
@@ -451,6 +453,19 @@ Before releasing v1.0:
 ---
 
 ## Recent Updates
+
+### 2026-09-19: Phase 8 Closed
+- **Done**: error handling (connection/permission/database-access mapping, numeric
+  argument validation, troubleshooting hints), progress bars, and the full documented
+  exit-code scheme — see the three entries below.
+- **Deferred, not implemented**: dry-run mode/SQL syntax validation, and the
+  Documentation and cross-platform/multi-version Testing checklist items (README, usage
+  examples, troubleshooting section, FAQ, testing against SQL Server 2012-2022/Azure
+  SQL/Windows/Linux/macOS). These need either a design decision (dry-run's scope) or
+  infrastructure this environment doesn't have (real DB instances per version,
+  machines/CI per platform) — explicitly out of scope for this pass, not an oversight.
+- Phase 8 checklist items are left unchecked rather than struck out, so it's clear
+  what was actually built versus what remains if picked up later.
 
 ### 2026-09-19: Troubleshooting Hints in Error Messages (Phase 8, partial)
 - **Added**: a `Hint:` line under each exception branch in `src/cli.py`'s `_run()`,
@@ -728,14 +743,16 @@ Before releasing v1.0:
 ---
 
 **Last Updated**: 2026-09-19
-**Status**: Phases 1, 2, 3, 5, 6, 7 Complete; Phase 4 Mostly Complete
+**Status**: Phases 1, 2, 3, 5, 6, 7, 8 Complete (Phase 8 closed with known deferrals);
+Phase 4 Mostly Complete
 **Current Phase**: Remaining gaps: procedure parameter parsing, procedure dependency
 ordering, CLR function metadata, database-level DDL triggers + explicit trigger order
 (Phase 4, deliberately deferred — see 2026-09-19 update). Phase 6 and Phase 4's integration
 tests are now done against a real DB (see 2026-09-19 update); Phase 7's parallel-extraction
 speedup is still unbenchmarked (needs a real DB with meaningful network/query latency).
-Phase 8 (error handling/polish) is now partially started — exit codes,
-permission/database-access error mapping, progress bars, numeric argument validation,
-and troubleshooting hints are done (see 2026-09-19 updates); dry-run mode remains.
-Phase 9 (packaging/distribution) not started.
+Phase 8 (error handling/polish) is closed: exit codes, permission/database-access error
+mapping, progress bars, numeric argument validation, and troubleshooting hints are done;
+dry-run mode, README/docs, and cross-platform/multi-version testing are explicitly
+deferred, not started (see 2026-09-19 close-out note). Phase 9 (packaging/distribution)
+not started.
 **Estimated Completion**: Not re-estimated — verify remaining Phase 8-9 scope before committing to a timeline
