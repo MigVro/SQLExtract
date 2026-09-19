@@ -253,13 +253,14 @@ class TestSchemaReader:
         col_nvarchar_max.is_computed = False
         col_nvarchar_max.default_value = None
         col_nvarchar_max.computed_definition = None
+        col_nvarchar_max.is_persisted = False
 
         mock_db_connection.fetch_all.return_value = [col_nvarchar_max]
 
         reader = SchemaReader(mock_db_connection)
         columns = reader.get_table_columns("dbo", "TestTable")
 
-        assert columns[0].max_length is None  # MAX should be None
+        assert columns[0].max_length == -1  # MAX is represented as -1, not None
 
     def test_get_sequences_no_filter(self, mock_db_connection):
         """Test getting all sequences."""

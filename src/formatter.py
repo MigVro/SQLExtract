@@ -14,17 +14,20 @@ logger = get_logger(__name__)
 class SQLFormatter:
     """Format and generate SQL scripts."""
 
-    def __init__(self, output_dir: str, omit_ts: bool = False, no_header: bool = False):
+    def __init__(self, output_dir: str, omit_ts: bool = False, no_header: bool = False, trust_cert: bool = False):
         """Initialize SQL formatter.
 
         Args:
             output_dir: Output directory path
             omit_ts: Omit the generation timestamp from output headers
             no_header: Omit the header comment block from output files entirely
+            trust_cert: Whether the generated deploy scripts should pass sqlcmd's
+                TrustServerCertificate flag (-C), matching the connection used to extract
         """
         self.output_dir = output_dir
         self.omit_ts = omit_ts
         self.no_header = no_header
+        self.trust_cert = trust_cert
         os.makedirs(output_dir, exist_ok=True)
 
     def format_schema(self, schema: SchemaInfo) -> str:
@@ -102,18 +105,21 @@ GO
         Returns:
             Column definition, indented with 4 spaces
         """
+        if col.is_computed:
+            col_def = f"    {escape_sql_identifier(col.name)} AS {col.computed_definition}"
+            if col.is_persisted:
+                col_def += " PERSISTED"
+            return col_def
+
         col_def = f"    {escape_sql_identifier(col.name)} {self._format_data_type(col.data_type, col.max_length, col.precision, col.scale)}"
 
         if col.is_identity:
             col_def += " IDENTITY(1,1)"
 
-        if col.is_computed:
-            col_def += f" AS {col.computed_definition}"
-        else:
-            col_def += " NULL" if col.is_nullable else " NOT NULL"
+        col_def += " NULL" if col.is_nullable else " NOT NULL"
 
-            if col.default_value:
-                col_def += f" DEFAULT {col.default_value}"
+        if col.default_value:
+            col_def += f" DEFAULT {col.default_value}"
 
         return col_def
 
@@ -362,18 +368,8 @@ ON {escape_sql_identifier(idx.schema_name)}.{escape_sql_identifier(idx.table_nam
         Returns:
             SQL statement
         """
-        definition = view['definition']
-
-        # Clean up definition if it starts with CREATE VIEW
-        if definition.strip().upper().startswith('CREATE VIEW'):
-            return definition + "\nGO\n"
-        else:
-            return f"""
-CREATE VIEW {escape_sql_identifier(view['schema_name'])}.{escape_sql_identifier(view['view_name'])}
-AS
-{definition}
-GO
-"""
+        # Definition already includes CREATE VIEW (captured as-is via sys.sql_modules)
+        return view['definition'] + "\nGO\n"
 
     def format_procedure(self, proc: Dict[str, Any]) -> str:
         """Generate CREATE PROCEDURE statement.
@@ -651,18 +647,21 @@ GO
                 table_sql += "\n" + self.format_extended_properties(table.schema_name, table.table_name, props)
             write_object('Tables', f"{table.schema_name}.{table.table_name}", table_sql)
 
+        # Split by constraint type into separately-numbered subfolders, so a plain
+        # alphabetical deploy of Constraints/ doesn't run a foreign key before the
+        # primary/unique key it references.
         for pk in primary_keys:
-            write_object('Constraints', pk.constraint_name, self.format_primary_key(pk))
+            write_object('Constraints/01_PrimaryKeys', pk.constraint_name, self.format_primary_key(pk))
 
         for uq in unique_constraints:
-            write_object('Constraints', uq.constraint_name, self.format_unique_constraint(uq))
+            write_object('Constraints/02_UniqueConstraints', uq.constraint_name, self.format_unique_constraint(uq))
 
         regular_fks = [fk for fk in foreign_keys if fk not in deferred_foreign_keys]
         for fk in regular_fks:
-            write_object('Constraints', fk.constraint_name, self.format_foreign_key(fk))
+            write_object('Constraints/03_ForeignKeys', fk.constraint_name, self.format_foreign_key(fk))
 
         for check in check_constraints:
-            write_object('Constraints', check.constraint_name, self.format_check_constraint(check))
+            write_object('Constraints/04_CheckConstraints', check.constraint_name, self.format_check_constraint(check))
 
         for idx in indexes:
             write_object('Indexes', idx.index_name, self.format_index(idx))
@@ -680,7 +679,7 @@ GO
             write_object('Triggers', f"{trigger['schema_name']}.{trigger['table_name']}.{trigger['trigger_name']}", self.format_trigger(trigger))
 
         for fk in deferred_foreign_keys:
-            write_object('Constraints', f"{fk.constraint_name}_DEFERRED", self.format_foreign_key(fk))
+            write_object('Constraints/03_ForeignKeys', f"{fk.constraint_name}_DEFERRED", self.format_foreign_key(fk))
 
         for table_key, statements in seed_data_by_table.items():
             write_object('SeedData', table_key, '\n'.join(statements))
@@ -913,15 +912,16 @@ GO
             "FILES=(",
         ]
         sh_lines.extend(f'    "{name}"' for name in sql_files)
+        trust_cert_flag = " -C" if self.trust_cert else ""
         sh_lines.extend([
             ")",
             "",
             'for f in "${FILES[@]}"; do',
             '    echo "Deploying $f..."',
             '    if [ -n "$SQLUSER" ]; then',
-            '        sqlcmd -S "$SERVER" -d "$DATABASE" -U "$SQLUSER" -P "$SQLPASSWORD" -i "$SCRIPT_DIR/$f" -b',
+            f'        sqlcmd -S "$SERVER" -d "$DATABASE" -U "$SQLUSER" -P "$SQLPASSWORD"{trust_cert_flag} -i "$SCRIPT_DIR/$f" -b',
             "    else",
-            '        sqlcmd -S "$SERVER" -d "$DATABASE" -E -i "$SCRIPT_DIR/$f" -b',
+            f'        sqlcmd -S "$SERVER" -d "$DATABASE" -E{trust_cert_flag} -i "$SCRIPT_DIR/$f" -b',
             "    fi",
             "done",
             "",
@@ -956,9 +956,9 @@ GO
             '    Write-Host "Deploying $f..."',
             "    $path = Join-Path $ScriptDir $f",
             "    if ($User) {",
-            "        sqlcmd -S $Server -d $Database -U $User -P $Password -i $path -b",
+            f"        sqlcmd -S $Server -d $Database -U $User -P $Password{trust_cert_flag} -i $path -b",
             "    } else {",
-            "        sqlcmd -S $Server -d $Database -E -i $path -b",
+            f"        sqlcmd -S $Server -d $Database -E{trust_cert_flag} -i $path -b",
             "    }",
             "    if ($LASTEXITCODE -ne 0) { throw \"Deployment failed on $f\" }",
             "}",
@@ -1070,9 +1070,11 @@ GO
             )
         else:
             lines.append(
-                "Objects are organized into subdirectories by type (Tables/, Constraints/, Indexes/, Triggers/, "
-                "Views/, Procedures/, Functions/, SeedData/). Deploy the subdirectories in that order; there is no "
-                "single combined script for this format."
+                "Objects are organized into subdirectories by type. Deploy them in this order (there is no single "
+                "combined script for this format): `Schemas/`, `Types/`, `Sequences/`, `Tables/`, "
+                "`Constraints/01_PrimaryKeys/`, `Constraints/02_UniqueConstraints/`, `Constraints/03_ForeignKeys/`, "
+                "`Constraints/04_CheckConstraints/`, `Indexes/`, `Views/`, `Procedures/`, `Functions/`, `Triggers/`, "
+                "`SeedData/`."
             )
         lines.append("")
 

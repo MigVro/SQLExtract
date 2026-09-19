@@ -126,6 +126,21 @@ INNER JOIN MQTT.Broker b ON rc.BrokerID = b.BrokerID
 WHERE rc.IsEnabled = 1
 GO
 
+-- Create trigger
+CREATE TRIGGER MQTT.trg_ReceiverConfig_SetModifiedDate
+ON MQTT.ReceiverConfig
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE rc
+    SET ModifiedDate = SYSUTCDATETIME()
+    FROM MQTT.ReceiverConfig rc
+    INNER JOIN inserted i ON rc.ReceiverConfigID = i.ReceiverConfigID
+END
+GO
+
 -- Create stored procedure
 CREATE PROCEDURE MQTT.sp_GetReceiversByBroker
     @BrokerID INT

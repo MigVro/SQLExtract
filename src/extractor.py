@@ -106,7 +106,7 @@ class DatabaseExtractor:
             self.connection = DatabaseConnection(self.config)
             self.connection.connect()
 
-            formatter = SQLFormatter(output_dir, omit_ts=omit_ts, no_header=no_header)
+            formatter = SQLFormatter(output_dir, omit_ts=omit_ts, no_header=no_header, trust_cert=self.config.trust_cert)
 
             # Extract all independent, schema-filtered metadata in parallel (each job
             # opens its own connection - sequences are extracted before tables since a

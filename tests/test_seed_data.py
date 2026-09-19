@@ -186,3 +186,28 @@ class TestSeedDataExtractor:
 
         insert_stmt = [s for s in statements if "INSERT INTO" in s][0]
         assert "NULL" in insert_stmt
+
+    def test_extract_bit_column_uses_1_0_not_python_bool(self, mock_db_connection):
+        """pyodbc returns Python bool for BIT columns; str(True)/str(False) are not
+        valid SQL literals and get parsed as (invalid) column references."""
+        col = ColumnInfo(
+            name="IsEnabled",
+            data_type="bit",
+            max_length=None,
+            precision=None,
+            scale=None,
+            is_nullable=False,
+            is_identity=False,
+            is_computed=False,
+            default_value=None,
+            computed_definition=None
+        )
+
+        mock_db_connection.fetch_all.return_value = [(True,), (False,)]
+
+        extractor = SeedDataExtractor(mock_db_connection)
+        statements = extractor.extract_table_data("dbo", "Config", [col])
+
+        insert_stmts = [s for s in statements if "INSERT INTO" in s]
+        assert "VALUES (1)" in insert_stmts[0]
+        assert "VALUES (0)" in insert_stmts[1]

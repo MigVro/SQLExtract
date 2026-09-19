@@ -28,6 +28,7 @@ class ColumnInfo:
     is_computed: bool
     default_value: Optional[str]
     computed_definition: Optional[str]
+    is_persisted: bool = False
 
 
 @dataclass
@@ -141,7 +142,8 @@ class SchemaReader:
             c.is_identity,
             c.is_computed,
             dc.definition AS default_value,
-            cc.definition AS computed_definition
+            cc.definition AS computed_definition,
+            cc.is_persisted
         FROM sys.columns c
         INNER JOIN sys.tables t ON c.object_id = t.object_id
         INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
@@ -163,14 +165,15 @@ class SchemaReader:
             columns.append(ColumnInfo(
                 name=row.column_name,
                 data_type=row.data_type,
-                max_length=max_length if max_length >= 0 else None,
+                max_length=max_length,
                 precision=row.precision if row.precision > 0 else None,
                 scale=row.scale if row.scale > 0 else None,
                 is_nullable=row.is_nullable,
                 is_identity=row.is_identity,
                 is_computed=row.is_computed,
                 default_value=row.default_value,
-                computed_definition=row.computed_definition
+                computed_definition=row.computed_definition,
+                is_persisted=bool(row.is_persisted)
             ))
 
         return columns
@@ -550,7 +553,7 @@ class SchemaReader:
             columns.append(ColumnInfo(
                 name=row.column_name,
                 data_type=row.data_type,
-                max_length=max_length if max_length >= 0 else None,
+                max_length=max_length,
                 precision=row.precision if row.precision > 0 else None,
                 scale=row.scale if row.scale > 0 else None,
                 is_nullable=row.is_nullable,

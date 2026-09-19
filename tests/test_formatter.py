@@ -196,6 +196,53 @@ class TestSQLFormatter:
         assert "IDENTITY" in sql
         assert "nvarchar(100)" in sql
 
+    def test_format_view_with_leading_comment(self):
+        """The raw definition (which may include a leading comment in the same batch as
+        CREATE VIEW) must be emitted as-is, not wrapped in a second synthetic CREATE VIEW."""
+        formatter = SQLFormatter("/tmp/test")
+
+        view = {
+            'schema_name': 'MQTT', 'view_name': 'vwActiveReceivers',
+            'definition': "-- Create view\nCREATE VIEW MQTT.vwActiveReceivers\nAS\nSELECT 1"
+        }
+
+        sql = formatter.format_view(view)
+
+        assert sql.count("CREATE VIEW") == 1
+
+    def test_format_table_computed_column(self):
+        """Computed columns must not get a data type before AS, and PERSISTED only when set."""
+        formatter = SQLFormatter("/tmp/test")
+
+        base_col = ColumnInfo(
+            name="SubTotal", data_type="decimal", max_length=None, precision=18, scale=2,
+            is_nullable=False, is_identity=False, is_computed=False,
+            default_value=None, computed_definition=None
+        )
+        persisted_col = ColumnInfo(
+            name="TaxAmount", data_type="decimal", max_length=None, precision=24, scale=6,
+            is_nullable=True, is_identity=False, is_computed=True,
+            default_value=None, computed_definition="([SubTotal]*[TaxRate])", is_persisted=True
+        )
+        non_persisted_col = ColumnInfo(
+            name="TotalAmount", data_type="decimal", max_length=None, precision=25, scale=6,
+            is_nullable=True, is_identity=False, is_computed=True,
+            default_value=None, computed_definition="([SubTotal]*((1)+[TaxRate]))", is_persisted=False
+        )
+
+        table = TableInfo(
+            schema_name="dbo", table_name="Orders",
+            columns=[base_col, persisted_col, non_persisted_col]
+        )
+
+        sql = formatter.format_table(table)
+
+        assert "[TaxAmount] AS ([SubTotal]*[TaxRate]) PERSISTED" in sql
+        assert "[TotalAmount] AS ([SubTotal]*((1)+[TaxRate]))" in sql
+        assert "[TotalAmount] AS ([SubTotal]*((1)+[TaxRate])) PERSISTED" not in sql
+        assert "decimal(24,6) AS" not in sql
+        assert "decimal(25,6) AS" not in sql
+
     def test_format_primary_key(self):
         """Test formatting primary key constraint."""
         formatter = SQLFormatter("/tmp/test")

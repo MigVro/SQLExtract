@@ -95,7 +95,9 @@ class SeedDataExtractor:
                 value = row[i]
                 if value is None:
                     values.append("NULL")
-                elif col.data_type in ('int', 'bigint', 'smallint', 'tinyint', 'bit', 'decimal', 'numeric', 'float', 'real', 'money', 'smallmoney'):
+                elif col.data_type == 'bit':
+                    values.append("1" if value else "0")
+                elif col.data_type in ('int', 'bigint', 'smallint', 'tinyint', 'decimal', 'numeric', 'float', 'real', 'money', 'smallmoney'):
                     values.append(str(value))
                 elif col.data_type in ('varchar', 'nvarchar', 'char', 'nchar', 'text', 'ntext'):
                     escaped_value = escape_sql_string(str(value))

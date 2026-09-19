@@ -151,7 +151,7 @@
 - [x] Unit tests for procedure extraction (`tests/test_schema.py`)
 - [x] Unit tests for function extraction (`tests/test_schema.py`)
 - [x] Unit tests for trigger extraction (`tests/test_schema.py`, `tests/test_formatter.py`)
-- [ ] Integration test: extract and re-deploy all programmability objects
+- [x] Integration test: extract and re-deploy all programmability objects (`tests/test_integration.py:TestFullRoundTrip`, see 2026-09-19 update)
 
 ---
 
@@ -215,8 +215,8 @@
 ### Testing
 - [x] Unit tests for each output format (deploy scripts + README; `write_single_file`/
       `write_per_object_format` themselves still untested beyond the smoke checks below)
-- [ ] Integration test: extract with each format, verify file structure
-- [ ] Integration test: deploy from each format
+- [x] Integration test: extract with each format, verify file structure (`tests/test_integration.py:TestFullRoundTrip`, see 2026-09-19 update)
+- [x] Integration test: deploy from each format (same test, see 2026-09-19 update)
 
 ---
 
@@ -431,6 +431,46 @@ Before releasing v1.0:
 
 ## Recent Updates
 
+### 2026-09-19: Full Extract/Redeploy Integration Test (Phase 4 + Phase 6 testing gaps closed)
+- **Added**: `tests/test_integration.py:TestFullRoundTrip`, a real (non-mocked) integration
+  test gated behind `SQLEXTRACT_TEST_SERVER` (Windows Auth). Deploys
+  `tests/fixtures/test_schema.sql` to a scratch database, runs `DatabaseExtractor.extract()`,
+  redeploys the output to a second scratch database, and compares object/row counts —
+  parametrized across all three output formats (`modular`, `single`, `per-object`). Also
+  verifies the new trigger (below) actually fires post-redeploy.
+- **Added**: one trigger to `tests/fixtures/test_schema.sql`
+  (`MQTT.trg_ReceiverConfig_SetModifiedDate`) — the only Phase 4 object type with no
+  integration coverage before this.
+- **Fixed** (all previously uncovered by any unit test): 
+  - `deploy.sh`/`deploy.ps1` had no `TrustServerCertificate` option, so they failed against
+    any self-signed instance (the ODBC Driver 18 default). `SQLFormatter` now takes
+    `trust_cert`, threaded from `ConnectionConfig`, and passes `sqlcmd -C` when set.
+  - Computed columns generated invalid `CREATE TABLE` SQL (a data type before `AS (...)`,
+    which SQL Server rejects) and silently dropped `PERSISTED`. Added `ColumnInfo.is_persisted`
+    and fixed `_format_column_def` in `src/formatter.py`.
+  - A view definition with a leading comment in the same batch as `CREATE VIEW` produced a
+    duplicated `CREATE VIEW` statement on redeploy. `format_view()` now always emits the
+    captured definition as-is (matching how procedures/functions/triggers already worked),
+    removing the buggy "clean up" branch.
+  - `nvarchar(MAX)`/`varchar(MAX)`/`varbinary(MAX)` columns lost their `MAX` marker
+    (`max_length == -1` was being collapsed to `None` in `src/schema.py`), producing a bare
+    type that SQL Server defaults to size 1 — causing truncation errors on any real data.
+  - `BIT` column values were rendered as Python `True`/`False` (pyodbc's native type for
+    `BIT`), which are not valid SQL literals and get parsed as invalid column references.
+    `src/seed_data.py` now emits `1`/`0`.
+  - Per-object format dumped PK/unique/FK/check constraints into one flat `Constraints/`
+    folder with no ordering, so a plain alphabetical deploy could run a FK before the PK it
+    references. Split into `Constraints/01_PrimaryKeys/`, `02_UniqueConstraints/`,
+    `03_ForeignKeys/`, `04_CheckConstraints/`. Also fixed the per-object deployment
+    instructions in the generated `README.md`, which were missing `Schemas/`/`Types/`/
+    `Sequences/` entirely and listed the wrong order.
+- **Tests**: 4 new unit tests (`test_format_table_computed_column`,
+  `test_format_view_with_leading_comment` in `tests/test_formatter.py`,
+  `test_extract_bit_column_uses_1_0_not_python_bool` in `tests/test_seed_data.py`, plus the
+  corrected `test_get_table_columns_nvarchar_max` assertion), and 10 new integration tests
+  (3 output formats × 3 checks + 1 modular-only file-listing check). Full unit suite: 117
+  passed. Integration suite: 10 passed against `(local)\MSSQL2017`.
+
 ### 2026-09-19: User-Defined Types and Parallel Extraction (Phase 7 complete)
 - **Added**: `SchemaReader.get_user_defined_types()` in `src/schema.py`, covering three
   kinds (`kind` field): `alias` (`sys.types`, `CREATE TYPE ... FROM <base type>`), `table`
@@ -586,8 +626,10 @@ Before releasing v1.0:
 
 **Last Updated**: 2026-09-19
 **Status**: Phases 1, 2, 3, 5, 6, 7 Complete; Phase 4 Mostly Complete
-**Current Phase**: Remaining gaps: database-level DDL triggers + explicit trigger order
-(Phase 4, deliberately deferred — see 2026-09-19 update); Phase 6 integration/deploy tests
-still need a real DB; Phase 7's parallel-extraction speedup is unbenchmarked (also needs a
-real DB). Phase 8 (error handling/polish) and Phase 9 (packaging/distribution) not started.
+**Current Phase**: Remaining gaps: procedure parameter parsing, procedure dependency
+ordering, CLR function metadata, database-level DDL triggers + explicit trigger order
+(Phase 4, deliberately deferred — see 2026-09-19 update). Phase 6 and Phase 4's integration
+tests are now done against a real DB (see 2026-09-19 update); Phase 7's parallel-extraction
+speedup is still unbenchmarked (needs a real DB with meaningful network/query latency).
+Phase 8 (error handling/polish) and Phase 9 (packaging/distribution) not started.
 **Estimated Completion**: Not re-estimated — verify remaining Phase 8-9 scope before committing to a timeline
