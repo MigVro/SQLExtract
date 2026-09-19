@@ -288,8 +288,10 @@
 - [ ] Detailed error messages with troubleshooting hints
 
 ### Logging and Progress
-- [ ] Progress bars for long operations (using `tqdm` or `rich`) — `create_progress()`
-      exists in `src/utils.py` but is not wired into `extractor.py`
+- [x] Progress bars for long operations (using `tqdm` or `rich`) — `create_progress()`
+      (`src/utils.py`) is wired into `DatabaseExtractor._run_jobs` (`src/extractor.py`),
+      covering the metadata-extraction and seed-data-extraction job batches; disabled via
+      `--quiet` (`show_progress=not quiet` in `src/cli.py`)
 - [x] Verbose mode for debugging (`--verbose`, pre-existing)
 - [x] Quiet mode for CI/CD (`--quiet`, pre-existing)
 - [x] Log file output (`--log-file`, pre-existing)
@@ -443,6 +445,28 @@ Before releasing v1.0:
 ---
 
 ## Recent Updates
+
+### 2026-09-19: Progress Bars (Phase 8, partial)
+- **Added**: `progress`/`task_description` params to `DatabaseExtractor._run_jobs()`
+  (`src/extractor.py`) — adds a `rich` progress task sized to the job batch and advances
+  it as each job completes, for both the sequential and parallel (`ThreadPoolExecutor`)
+  branches.
+- **Added**: `show_progress: bool = True` param on `DatabaseExtractor.extract()`. Wraps
+  the connect + metadata-extraction + seed-data-extraction stage in a started/stopped
+  `Progress` instance (from `create_progress()`), covering both `_run_jobs()` calls
+  (`"Extracting metadata"`, `"Extracting seed data"`). The output-writing stage
+  (single/per-object/modular file generation) is local disk I/O, not network-bound, and
+  was left without a progress bar.
+- **Changed**: `src/utils.py` now holds one shared `rich.console.Console` instance, used
+  by both `RichHandler` (in `setup_logging`) and `create_progress()`. Rich's `Live`
+  display (used internally by `Progress`) and logging need to share a console to render
+  correctly together — two independent consoles writing to the same terminal would
+  garble each other's output.
+- **Wired into**: `src/cli.py` passes `show_progress=not quiet` to `extract()`, so
+  `--quiet` suppresses the progress bar along with regular log output.
+- **Tests**: no new automated tests (progress-bar rendering isn't meaningfully
+  assertable via mocked unit tests); verified manually with a mocked `_run_jobs` that
+  sleeps between jobs. Full suite: 133 passed, 9 skipped (need real DB).
 
 ### 2026-09-19: Structured Exit Codes (Phase 8, partial)
 - **Added**: `AuthenticationError`, `DatabaseAccessError`, `PermissionDeniedError` in
@@ -680,8 +704,8 @@ ordering, CLR function metadata, database-level DDL triggers + explicit trigger 
 (Phase 4, deliberately deferred — see 2026-09-19 update). Phase 6 and Phase 4's integration
 tests are now done against a real DB (see 2026-09-19 update); Phase 7's parallel-extraction
 speedup is still unbenchmarked (needs a real DB with meaningful network/query latency).
-Phase 8 (error handling/polish) is now partially started — exit codes and
-permission/database-access error mapping are done (see 2026-09-19 update); dry-run mode,
-troubleshooting hints, deeper argument validation, and progress bars remain. Phase 9
-(packaging/distribution) not started.
+Phase 8 (error handling/polish) is now partially started — exit codes,
+permission/database-access error mapping, and progress bars are done (see 2026-09-19
+updates); dry-run mode, troubleshooting hints, and deeper argument validation remain.
+Phase 9 (packaging/distribution) not started.
 **Estimated Completion**: Not re-estimated — verify remaining Phase 8-9 scope before committing to a timeline

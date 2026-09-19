@@ -5,6 +5,7 @@ import shutil
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional, Dict, Any, Callable
+from rich.progress import Progress
 from .connection import DatabaseConnection, ConnectionConfig
 from .schema import SchemaReader
 from .constraints import ConstraintExtractor
@@ -12,7 +13,7 @@ from .indexes import IndexExtractor
 from .dependency import order_tables_by_dependency, order_views_by_dependency
 from .seed_data import SeedDataExtractor
 from .formatter import SQLFormatter
-from .utils import get_logger, SQLExtractError, ExtractionError, OutputError
+from .utils import get_logger, SQLExtractError, ExtractionError, OutputError, create_progress
 
 logger = get_logger(__name__)
 
@@ -33,7 +34,9 @@ class DatabaseExtractor:
         self,
         jobs: Dict[str, Callable[[DatabaseConnection], Any]],
         parallel: bool,
-        max_workers: int
+        max_workers: int,
+        progress: Optional[Progress] = None,
+        task_description: str = "Extracting..."
     ) -> Dict[str, Any]:
         """Run independent, schema-filtered extraction jobs.
 
@@ -44,6 +47,8 @@ class DatabaseExtractor:
             jobs: Mapping of result key -> callable taking a DatabaseConnection
             parallel: Run concurrently via a thread pool if True, sequentially otherwise
             max_workers: Maximum number of concurrent connections/threads
+            progress: Optional Progress instance to report per-job completion to
+            task_description: Label shown next to the progress bar for this batch of jobs
 
         Returns:
             Mapping of result key -> job result
@@ -51,8 +56,15 @@ class DatabaseExtractor:
         if not jobs:
             return {}
 
+        task_id = progress.add_task(task_description, total=len(jobs)) if progress else None
+
         if not parallel:
-            return {name: job(self.connection) for name, job in jobs.items()}
+            results: Dict[str, Any] = {}
+            for name, job in jobs.items():
+                results[name] = job(self.connection)
+                if progress:
+                    progress.advance(task_id)
+            return results
 
         def run_job(name: str, job: Callable[[DatabaseConnection], Any]) -> Any:
             conn = DatabaseConnection(self.config, label=name)
@@ -62,11 +74,13 @@ class DatabaseExtractor:
             finally:
                 conn.close()
 
-        results: Dict[str, Any] = {}
+        results = {}
         with ThreadPoolExecutor(max_workers=min(max_workers, len(jobs))) as executor:
             future_to_name = {executor.submit(run_job, name, job): name for name, job in jobs.items()}
             for future in as_completed(future_to_name):
                 results[future_to_name[future]] = future.result()
+                if progress:
+                    progress.advance(task_id)
 
         return results
 
@@ -82,7 +96,8 @@ class DatabaseExtractor:
         omit_ts: bool = False,
         no_header: bool = False,
         parallel: bool = True,
-        max_workers: int = 8
+        max_workers: int = 8,
+        show_progress: bool = True
     ) -> None:
         """Extract database schema and data.
 
@@ -99,6 +114,7 @@ class DatabaseExtractor:
             parallel: Run independent metadata/seed-data extraction queries concurrently,
                 each on its own database connection
             max_workers: Maximum number of concurrent connections when parallel is True
+            show_progress: Display a progress bar for metadata/seed-data extraction
         """
         try:
             formatter = SQLFormatter(output_dir, omit_ts=omit_ts, no_header=no_header, trust_cert=self.config.trust_cert)
@@ -107,6 +123,9 @@ class DatabaseExtractor:
             raise OutputError(f"Failed to prepare output directory: {e}")
 
         try:
+            progress = create_progress() if show_progress else None
+            if progress:
+                progress.start()
             try:
                 # Connect to database
                 logger.info("Connecting to database...")
@@ -137,7 +156,10 @@ class DatabaseExtractor:
 
                 logger.info(f"Extracting schema metadata ({'parallel' if parallel else 'sequential'}, {len(metadata_jobs)} queries)...")
                 start = time.monotonic()
-                results = self._run_jobs(metadata_jobs, parallel=parallel, max_workers=max_workers)
+                results = self._run_jobs(
+                    metadata_jobs, parallel=parallel, max_workers=max_workers,
+                    progress=progress, task_description="Extracting metadata"
+                )
                 logger.info(f"Schema metadata extracted in {time.monotonic() - start:.2f}s")
 
                 schemas = results['schemas']
@@ -204,7 +226,10 @@ class DatabaseExtractor:
                         )
                         for table in data_tables
                     }
-                    seed_results = self._run_jobs(seed_jobs, parallel=parallel, max_workers=max_workers)
+                    seed_results = self._run_jobs(
+                        seed_jobs, parallel=parallel, max_workers=max_workers,
+                        progress=progress, task_description="Extracting seed data"
+                    )
 
                     # Reassemble in dependency order (not completion order)
                     for table in data_tables:
@@ -218,6 +243,9 @@ class DatabaseExtractor:
             except Exception as e:
                 logger.error(f"Extraction failed: {e}")
                 raise ExtractionError(f"Extraction failed: {e}")
+            finally:
+                if progress:
+                    progress.stop()
 
             try:
                 # Generate SQL scripts

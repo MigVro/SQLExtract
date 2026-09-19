@@ -137,7 +137,8 @@ def _run(
             omit_ts=omit_ts,
             no_header=no_header,
             parallel=not no_parallel,
-            max_workers=max_workers
+            max_workers=max_workers,
+            show_progress=not quiet
         )
 
         click.echo(f"\n✓ Extraction complete! SQL scripts written to: {output}")

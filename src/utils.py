@@ -7,6 +7,10 @@ from rich.console import Console
 from rich.logging import RichHandler
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
 
+# Shared with create_progress() so logging and progress bars render through the
+# same Rich console instead of two independent ones fighting over the terminal.
+console = Console()
+
 
 def setup_logging(verbose: bool = False, quiet: bool = False, log_file: Optional[str] = None):
     """Configure logging with rich formatting.
@@ -23,7 +27,7 @@ def setup_logging(verbose: bool = False, quiet: bool = False, log_file: Optional
     handlers = []
 
     if not quiet:
-        handlers.append(RichHandler(rich_tracebacks=True, show_time=False, show_path=False))
+        handlers.append(RichHandler(console=console, rich_tracebacks=True, show_time=False, show_path=False))
 
     if log_file:
         file_handler = logging.FileHandler(log_file)
@@ -63,6 +67,7 @@ def create_progress() -> Progress:
         BarColumn(),
         TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
         TimeElapsedColumn(),
+        console=console,
     )
 
 
