@@ -372,6 +372,9 @@ sqlextract/
 ### Output Options
 ```
 --format              Output format: single, per-object, modular (default: modular)
+--clean               Delete the output directory before extraction
+--omit-ts             Omit the generation timestamp from output headers (avoids
+                      spurious diffs when re-extracting an unchanged schema)
 --script-drops        Include DROP statements
 --script-permissions  Include permissions (GRANT/DENY)
 --include-comments    Include extended properties as comments
