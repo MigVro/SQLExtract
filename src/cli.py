@@ -4,7 +4,16 @@ import click
 import sys
 from .connection import ConnectionConfig
 from .extractor import DatabaseExtractor
-from .utils import setup_logging, get_logger, SQLExtractError, ConnectionError as ConnError
+from .utils import (
+    setup_logging,
+    get_logger,
+    SQLExtractError,
+    ConnectionError as ConnError,
+    AuthenticationError,
+    DatabaseAccessError,
+    PermissionDeniedError,
+    OutputError,
+)
 
 logger = get_logger(__name__)
 
@@ -32,7 +41,7 @@ logger = get_logger(__name__)
 @click.option('--quiet', '-q', is_flag=True, help='Quiet mode (errors only)')
 @click.option('--log-file', help='Log to file')
 @click.version_option(version='1.0.0')
-def main(
+def _run(
     server: str,
     port: int,
     database: str,
@@ -134,20 +143,54 @@ def main(
         click.echo(f"\n✓ Extraction complete! SQL scripts written to: {output}")
         sys.exit(0)
 
+    except AuthenticationError as e:
+        click.echo(f"\n✗ Authentication Error: {e}", err=True)
+        sys.exit(2)
+
+    except DatabaseAccessError as e:
+        click.echo(f"\n✗ Database Not Found: {e}", err=True)
+        sys.exit(3)
+
+    except PermissionDeniedError as e:
+        click.echo(f"\n✗ Permission Denied: {e}", err=True)
+        sys.exit(4)
+
     except ConnError as e:
         click.echo(f"\n✗ Connection Error: {e}", err=True)
         sys.exit(1)
 
+    except OutputError as e:
+        click.echo(f"\n✗ Output Error: {e}", err=True)
+        sys.exit(11)
+
     except SQLExtractError as e:
         click.echo(f"\n✗ Extraction Error: {e}", err=True)
         sys.exit(10)
+
+    except ValueError as e:
+        click.echo(f"\n✗ Invalid Arguments: {e}", err=True)
+        sys.exit(5)
 
     except Exception as e:
         click.echo(f"\n✗ Unexpected Error: {e}", err=True)
         if verbose:
             import traceback
             traceback.print_exc()
-        sys.exit(11)
+        sys.exit(10)
+
+
+def main() -> None:
+    """Entry point wrapper: remaps Click's own argument-validation exit code
+    (2) to this tool's "Invalid arguments" code (5) so all CLI failures use
+    the exit code scheme documented in CLAUDE.md, not Click's defaults.
+    """
+    try:
+        _run.main(standalone_mode=False)
+    except click.UsageError as e:
+        e.show()
+        sys.exit(5)
+    except click.exceptions.Exit as e:
+        sys.exit(e.exit_code)
 
 
 if __name__ == '__main__':

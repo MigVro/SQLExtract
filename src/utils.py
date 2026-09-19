@@ -105,6 +105,29 @@ class ConnectionError(SQLExtractError):
     pass
 
 
+class AuthenticationError(ConnectionError):
+    """Login/authentication failure."""
+    pass
+
+
+class DatabaseAccessError(ConnectionError):
+    """Database does not exist, or the login has no access to it.
+
+    SQL Server reports both cases with the identical "Cannot open database"
+    message (error 4060) by design, to avoid leaking which one it is to an
+    unauthorized login - so the two can't be told apart here, and the raised
+    message says so explicitly rather than guessing. Not raised for
+    permission failures on objects *within* an already-open database (see
+    PermissionDeniedError).
+    """
+    pass
+
+
+class PermissionDeniedError(ConnectionError):
+    """Insufficient permissions to access a database object."""
+    pass
+
+
 class ExtractionError(SQLExtractError):
     """Error during schema extraction."""
     pass

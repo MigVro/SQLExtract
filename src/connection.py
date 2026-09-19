@@ -4,7 +4,13 @@ import pyodbc
 import time
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
-from .utils import get_logger, ConnectionError as ConnError
+from .utils import (
+    get_logger,
+    ConnectionError as ConnError,
+    AuthenticationError,
+    DatabaseAccessError,
+    PermissionDeniedError,
+)
 
 logger = get_logger(__name__)
 
@@ -114,10 +120,14 @@ class DatabaseConnection:
                 error_msg = str(e)
 
                 if "Login failed" in error_msg or "Login timeout" in error_msg:
-                    raise ConnError(f"Authentication failed: {error_msg}")
+                    raise AuthenticationError(f"Authentication failed: {error_msg}")
 
                 if "Cannot open database" in error_msg:
-                    raise ConnError(f"Database not found: {self.config.database}")
+                    raise DatabaseAccessError(
+                        f"Cannot access database '{self.config.database}': "
+                        "either it doesn't exist, or the login lacks permission "
+                        "to it (SQL Server reports both cases identically)"
+                    )
 
                 if attempt < self.max_retries:
                     wait_time = 2 ** attempt  # Exponential backoff
@@ -137,7 +147,8 @@ class DatabaseConnection:
             Cursor with query results
 
         Raises:
-            ConnError: If not connected or query fails
+            PermissionDeniedError: If the login lacks permission on the queried object
+            ConnError: If not connected or query fails for another reason
         """
         if not self.cursor:
             raise ConnError("Not connected to database")
@@ -149,7 +160,10 @@ class DatabaseConnection:
                 self.cursor.execute(query)
             return self.cursor
         except pyodbc.Error as e:
-            raise ConnError(f"Query execution failed: {str(e)}")
+            error_msg = str(e)
+            if "permission was denied" in error_msg:
+                raise PermissionDeniedError(f"Permission denied: {error_msg}")
+            raise ConnError(f"Query execution failed: {error_msg}")
 
     def fetch_all(self, query: str, params: Optional[tuple] = None) -> list:
         """Execute query and fetch all results.

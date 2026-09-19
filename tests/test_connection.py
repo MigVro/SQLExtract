@@ -4,7 +4,12 @@ import pytest
 from unittest.mock import Mock, MagicMock, patch
 import pyodbc
 from src.connection import ConnectionConfig, DatabaseConnection
-from src.utils import ConnectionError as ConnError
+from src.utils import (
+    ConnectionError as ConnError,
+    AuthenticationError,
+    DatabaseAccessError,
+    PermissionDeniedError,
+)
 
 
 class TestConnectionConfig:
@@ -172,7 +177,7 @@ class TestDatabaseConnection:
 
         db_conn = DatabaseConnection(config, max_retries=1)
 
-        with pytest.raises(ConnError, match="Authentication failed"):
+        with pytest.raises(AuthenticationError, match="Authentication failed"):
             db_conn.connect()
 
     @patch('src.connection.pyodbc.connect')
@@ -190,7 +195,7 @@ class TestDatabaseConnection:
 
         db_conn = DatabaseConnection(config, max_retries=1)
 
-        with pytest.raises(ConnError, match="Database not found"):
+        with pytest.raises(DatabaseAccessError, match="Cannot access database"):
             db_conn.connect()
 
     @patch('src.connection.pyodbc.connect')
@@ -260,6 +265,34 @@ class TestDatabaseConnection:
 
         with pytest.raises(ConnError, match="Not connected to database"):
             db_conn.execute_query("SELECT 1")
+
+    @patch('src.connection.pyodbc.connect')
+    def test_execute_query_permission_denied(self, mock_connect):
+        """Test execute_query raises PermissionDeniedError on object-level permission errors."""
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = (1,)
+        mock_cursor.execute.side_effect = [
+            None,  # initial "SELECT 1" test query during connect()
+            pyodbc.Error("The SELECT permission was denied on the object 'Config', database 'TestDB', schema 'dbo'."),
+        ]
+
+        mock_conn = MagicMock()
+        mock_conn.cursor.return_value = mock_cursor
+        mock_connect.return_value = mock_conn
+
+        config = ConnectionConfig(
+            server="localhost",
+            database="TestDB",
+            user="sa",
+            password="TestPass",
+            trust_cert=True
+        )
+
+        db_conn = DatabaseConnection(config)
+        db_conn.connect()
+
+        with pytest.raises(PermissionDeniedError, match="Permission denied"):
+            db_conn.execute_query("SELECT * FROM dbo.Config")
 
     @patch('src.connection.pyodbc.connect')
     def test_execute_query_success(self, mock_connect):
