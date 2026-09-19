@@ -61,7 +61,7 @@ class DependencyGraph:
             rec_stack.add(node)
             path.append(node)
 
-            for neighbor in self.graph.get(node, []):
+            for neighbor in sorted(self.graph.get(node, [])):
                 if neighbor not in visited:
                     dfs(neighbor, path.copy())
                 elif neighbor in rec_stack:
@@ -73,7 +73,7 @@ class DependencyGraph:
 
             rec_stack.remove(node)
 
-        for table in self.all_tables:
+        for table in sorted(self.all_tables):
             if table not in visited:
                 dfs(table, [])
 
@@ -93,11 +93,11 @@ class DependencyGraph:
         """
         # Calculate in-degree for each node (how many tables each table depends on)
         # In-degree = number of incoming edges = number of dependencies
-        in_degree = {table: len(self.graph.get(table, set())) for table in self.all_tables}
+        in_degree = {table: len(self.graph.get(table, set())) for table in sorted(self.all_tables)}
 
         # Queue for nodes with no dependencies (in-degree = 0)
         # These tables can be created first
-        queue = deque([table for table, degree in in_degree.items() if degree == 0])
+        queue = deque(sorted(table for table, degree in in_degree.items() if degree == 0))
         sorted_tables = []
         deferred_fks = []
 
@@ -108,20 +108,20 @@ class DependencyGraph:
 
             # For all tables that depend on this table, reduce their in-degree
             # (since this dependency is now satisfied)
-            for dependent in self.reverse_graph.get(table, []):
+            for dependent in sorted(self.reverse_graph.get(table, [])):
                 in_degree[dependent] -= 1
                 if in_degree[dependent] == 0:
                     queue.append(dependent)
 
         # If not all tables are sorted, there are circular dependencies
         if len(sorted_tables) < len(self.all_tables):
-            remaining = set(self.all_tables) - set(sorted_tables)
+            remaining = sorted(set(self.all_tables) - set(sorted_tables))
             logger.warning(f"Circular dependencies detected. {len(remaining)} tables affected.")
 
             # Add remaining tables and mark their FKs as deferred
             for table in remaining:
                 sorted_tables.append(table)
-                for dep in self.graph.get(table, []):
+                for dep in sorted(self.graph.get(table, [])):
                     if dep in remaining or dep in sorted_tables:
                         deferred_fks.append((table, dep))
 
