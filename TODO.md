@@ -90,7 +90,7 @@
 
 ---
 
-## Phase 3: Index and View Extraction (Week 3) ✅ COMPLETE
+## Phase 3: Index and View Extraction (Week 3) - MOSTLY COMPLETE
 
 ### Index Extraction ✅
 - [x] Extract all indexes (`src/indexes.py`)
@@ -102,12 +102,12 @@
 - [x] Exclude PK/unique constraint indexes (already scripted)
 - [x] Generate `CREATE INDEX` statements
 
-### View Extraction ✅
-- [x] Extract view definitions (`src/views.py`)
-  - [x] Use `OBJECT_DEFINITION()` or `sys.sql_modules`
-  - [x] Handle SCHEMABINDING
-  - [x] Handle indexed views
-- [x] Order views by dependencies
+### View Extraction
+- [x] Extract view definitions (`src/schema.py: get_views`, not a standalone `src/views.py`)
+  - [x] Use `sys.sql_modules` definition
+  - [x] Handle SCHEMABINDING (definition captured as-is)
+  - [x] Handle indexed views (definition captured as-is)
+- [ ] Order views by dependencies (not implemented — `src/dependency.py` only orders tables/FKs)
 - [x] Generate `CREATE VIEW` statements
 
 ### Testing ✅
@@ -117,23 +117,27 @@
 
 ---
 
-## Phase 4: Stored Procedures and Functions (Week 4)
+## Phase 4: Stored Procedures and Functions (Week 4) - PARTIALLY COMPLETE
 
-### Stored Procedure Extraction
-- [ ] Extract procedure definitions (`src/procedures.py`)
-  - [ ] Use `OBJECT_DEFINITION()`
-  - [ ] Handle encrypted procedures (warn and skip)
-  - [ ] Preserve parameters
-- [ ] Generate `CREATE PROCEDURE` statements
+> Note: procedure/view/function extraction was implemented in `src/schema.py` (not
+> standalone `src/procedures.py`/`src/functions.py` modules as originally planned),
+> with `CREATE` statement generation in `src/formatter.py`.
+
+### Stored Procedure Extraction ✅
+- [x] Extract procedure definitions (`src/schema.py: get_stored_procedures`)
+  - [x] Use `sys.sql_modules` definition
+  - [x] Handle encrypted procedures (warn and skip)
+  - [ ] Preserve parameters (definition captured as-is; parameters not parsed separately)
+- [x] Generate `CREATE PROCEDURE` statements
 - [ ] Handle procedure dependencies (if needed)
 
-### Function Extraction
-- [ ] Extract function definitions (`src/functions.py`)
-  - [ ] Scalar functions
-  - [ ] Inline table-valued functions
-  - [ ] Multi-statement table-valued functions
+### Function Extraction ✅
+- [x] Extract function definitions (`src/schema.py: get_functions`)
+  - [x] Scalar functions
+  - [x] Inline table-valued functions
+  - [x] Multi-statement table-valued functions
   - [ ] CLR functions (metadata only)
-- [ ] Generate `CREATE FUNCTION` statements
+- [x] Generate `CREATE FUNCTION` statements
 
 ### Trigger Extraction
 - [ ] Extract trigger definitions (`src/triggers.py`)
@@ -144,8 +148,8 @@
 - [ ] Generate `CREATE TRIGGER` statements
 
 ### Testing
-- [ ] Unit tests for procedure extraction
-- [ ] Unit tests for function extraction
+- [x] Unit tests for procedure extraction (`tests/test_schema.py`)
+- [x] Unit tests for function extraction (`tests/test_schema.py`)
 - [ ] Unit tests for trigger extraction
 - [ ] Integration test: extract and re-deploy all programmability objects
 
@@ -181,24 +185,24 @@
 
 ---
 
-## Phase 6: Output Formatting (Week 6)
+## Phase 6: Output Formatting (Week 6) - MOSTLY COMPLETE
 
-### Single File Format
-- [ ] Implement single file output (`src/formatter.py`)
-  - [ ] Combine all objects into one file
-  - [ ] Add section comments
-  - [ ] Add batch separators (GO)
+### Single File Format ✅
+- [x] Implement single file output (`src/formatter.py`)
+  - [x] Combine all objects into one file
+  - [x] Add section comments
+  - [x] Add batch separators (GO)
 
-### Per-Object Format
-- [ ] Implement per-object file output
-  - [ ] Create subdirectories (tables/, procedures/, etc.)
-  - [ ] Generate filenames from schema and object name
-  - [ ] Write each object to separate file
+### Per-Object Format ✅
+- [x] Implement per-object file output
+  - [x] Create subdirectories (tables/, procedures/, etc.)
+  - [x] Generate filenames from schema and object name
+  - [x] Write each object to separate file
 
 ### Modular Format
-- [ ] Implement modular file output
-  - [ ] Generate numbered files (01_, 02_, etc.)
-  - [ ] Group objects by type
+- [x] Implement modular file output
+  - [x] Generate numbered files (01_, 02_, etc.)
+  - [x] Group objects by type
   - [ ] Create deployment script (deploy.sh, deploy.ps1)
 
 ### Documentation Generation
@@ -404,6 +408,16 @@ Before releasing v1.0:
 
 ## Recent Updates
 
+### 2026-09-19: Checklist Reconciled with Actual Code State
+- **Found**: This checklist had drifted significantly from the codebase (no updates since 2025-10-09).
+- **Phase 4** (procedures/functions): largely implemented, but in `src/schema.py` + `src/formatter.py`
+  rather than the planned standalone `src/procedures.py`/`src/functions.py` modules. Triggers remain unimplemented.
+- **Phase 6** (output formatting): single-file, per-object, and modular formats are all implemented in
+  `src/formatter.py` and wired into the CLI via `--format`. Deployment script and README generation are not done.
+- **Phase 3**: view dependency ordering was marked done but is not implemented (`src/dependency.py` only orders tables/FKs).
+- Recent commits not previously reflected here: `--clean`, `--omit-ts`, `--no-header` CLI options, and
+  fixes for blank lines / crash risk in extracted views/procedures/functions.
+
 ### 2025-10-09: Critical Bug Fix - Topological Sort
 - **Fixed**: Inverted topological sort algorithm in `src/dependency.py:94-99`
 - **Issue**: Tables were ordered with dependencies BEFORE their parents (backwards)
@@ -427,7 +441,8 @@ Before releasing v1.0:
 
 ---
 
-**Last Updated**: 2025-10-09
-**Status**: Phases 1-3 Complete, Phase 5 Complete, Testing Infrastructure Complete
-**Current Phase**: Ready for Phase 4 (Stored Procedures and Functions) or Phase 6 (Output Formatting)
-**Estimated Completion**: 5-6 weeks remaining from current state
+**Last Updated**: 2026-09-19
+**Status**: Phases 1, 2, 5 Complete; Phases 3, 4, 6 Mostly/Partially Complete
+**Current Phase**: Remaining gaps: trigger extraction (Phase 4), view dependency ordering (Phase 3),
+deployment script + README generation (Phase 6)
+**Estimated Completion**: Not re-estimated — verify remaining Phase 7-9 scope before committing to a timeline
