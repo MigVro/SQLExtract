@@ -118,23 +118,44 @@ This document outlines features that are **out of scope for v1.0** but planned f
 
 ## Version 2.0: Multi-Database Support
 
-### MySQL/MariaDB Support
-- **Feature**: Extract schema from MySQL/MariaDB databases
-- **Use Case**: Multi-platform tool
-- **Complexity**: High
-- **Priority**: Medium
-
 ### PostgreSQL Support
 - **Feature**: Extract schema from PostgreSQL databases
 - **Use Case**: Multi-platform tool
 - **Complexity**: High
 - **Priority**: Medium
-
-### Oracle Support
-- **Feature**: Extract schema from Oracle databases
-- **Use Case**: Enterprise database migrations
-- **Complexity**: Very High
-- **Priority**: Low
+- **Why it's High complexity**: every module today assumes SQL Server —
+  `src/connection.py` is pyodbc-only, `src/schema.py`/`src/constraints.py`/`src/indexes.py`
+  query `sys.*` catalog views and `OBJECT_DEFINITION()`, and `src/formatter.py` generates
+  T-SQL (`[schema].[object]` brackets, `GO` batches, `SET IDENTITY_INSERT`). None of this
+  transfers to PostgreSQL's `information_schema`/`pg_catalog`, double-quoted identifiers, or
+  PL/pgSQL. This needs a dialect-abstraction layer, not a few conditionals.
+- **Phased implementation plan**:
+  1. **Dialect interface extraction (refactor only, no behavior change)** — define a
+     `Dialect`/backend interface (connection, catalog queries, identifier quoting, SQL
+     generation templates); move today's pyodbc connection logic, `sys.*` catalog queries,
+     and T-SQL generation behind it as the "sqlserver" implementation. Existing SQL Server
+     output must be byte-for-byte unchanged; full test suite re-run as verification.
+  2. **CLI/config plumbing** — `--db-type` flag (`sqlserver` default, `postgres`), threaded
+     through config loading to dialect selection; decide how driver-specific args (e.g.
+     `--windows-auth` vs. Postgres SSL modes) validate per dialect.
+  3. **PostgreSQL connectivity** — `psycopg`/`psycopg2` dependency, `PostgresConnection`
+     (connection string, retry/backoff, validation) against the Phase 1 interface, standard
+     Postgres auth (password, `.pgpass`) — no Windows Auth equivalent.
+  4. **PostgreSQL schema introspection** — tables/columns (`information_schema`/
+     `pg_catalog`), constraints (`pg_constraint`), indexes incl. partial indexes
+     (`pg_indexes`), views + dependencies (`pg_depend`), sequences
+     (`information_schema.sequences` — more central in Postgres via `SERIAL`/`IDENTITY`),
+     functions (`pg_proc` — no scalar/table-valued split like SQL Server), stored procedures
+     (PostgreSQL 11+ only — confirm minimum supported version), triggers (`pg_trigger`),
+     user-defined types (`pg_type` — enums/composite types have no SQL Server equivalent,
+     scope TBD), table/column comments (`obj_description`/`col_description`).
+  5. **PostgreSQL SQL generation** — double-quote identifier quoting, Postgres DDL templates,
+     statement batching (no `GO` — decide `;`-separated convention), seed data `INSERT`s
+     (no `IDENTITY_INSERT` — use `OVERRIDING SYSTEM VALUE`/`setval()`), `psql` instead of
+     `sqlcmd` in generated deploy scripts.
+  6. **Testing and docs** — Postgres Docker Compose service, unit tests per new module,
+     integration test extracting/redeploying a Postgres sample schema per output format,
+     README/FAQ updates (remove "no Postgres" scope language, document `--db-type`).
 
 ### Cross-Database Migration
 - **Feature**: Translate SQL syntax between database engines

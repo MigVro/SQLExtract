@@ -393,6 +393,9 @@ See [FUTURE.md](FUTURE.md) for:
 - [ ] Always Encrypted column support
 - [ ] Graph database support
 - [ ] SQL Agent job extraction
+- [ ] PostgreSQL support (see [FUTURE.md](FUTURE.md#postgresql-support) for the phased
+      plan — dialect abstraction refactor first, then Postgres connectivity/introspection/
+      SQL generation; no behavior change for existing SQL Server users along the way)
 
 ---
 
