@@ -273,21 +273,34 @@
 ## Phase 8: Error Handling and Polish (Week 8)
 
 ### Error Handling
-- [ ] Connection error handling with retries
-- [ ] Permission error handling (clear messages)
-- [ ] Invalid argument validation
+- [x] Connection error handling with retries (`src/connection.py:DatabaseConnection.connect`,
+      pre-existing: exponential backoff, `max_retries`)
+- [x] Permission error handling (clear messages) — `PermissionDeniedError` for object-level
+      denials during query execution (`src/connection.py:execute_query`); login-time
+      "Cannot open database" (SQL Server error 4060) is ambiguous between "doesn't exist"
+      and "login has no access" by design (SQL Server uses identical wording for both to
+      avoid leaking which case it is), so `DatabaseAccessError` states that explicitly
+      rather than asserting one
+- [ ] Invalid argument validation — `--user`/`--password` without `--windows-auth` and
+      Click's own required-option/choice validation both map to exit 5; no deeper
+      validation (e.g. `--max-rows` range, `--tables` format) yet
 - [ ] SQL syntax validation (dry-run mode)
 - [ ] Detailed error messages with troubleshooting hints
 
 ### Logging and Progress
-- [ ] Progress bars for long operations (using `tqdm` or `rich`)
-- [ ] Verbose mode for debugging
-- [ ] Quiet mode for CI/CD
-- [ ] Log file output
+- [ ] Progress bars for long operations (using `tqdm` or `rich`) — `create_progress()`
+      exists in `src/utils.py` but is not wired into `extractor.py`
+- [x] Verbose mode for debugging (`--verbose`, pre-existing)
+- [x] Quiet mode for CI/CD (`--quiet`, pre-existing)
+- [x] Log file output (`--log-file`, pre-existing)
 
 ### Exit Codes
-- [ ] Define exit codes for different error types
-- [ ] Return appropriate exit codes
+- [x] Define exit codes for different error types (`src/utils.py`: `AuthenticationError`,
+      `DatabaseAccessError`, `PermissionDeniedError`, `ExtractionError`, `OutputError`
+      under `SQLExtractError`/`ConnectionError`)
+- [x] Return appropriate exit codes (`src/cli.py`: 1 connection, 2 auth, 3 database
+      access, 4 permission denied, 5 invalid arguments, 10 extraction error, 11 output
+      write error — matches the scheme in CLAUDE.md)
 
 ### Documentation
 - [ ] Complete README.md
@@ -430,6 +443,42 @@ Before releasing v1.0:
 ---
 
 ## Recent Updates
+
+### 2026-09-19: Structured Exit Codes (Phase 8, partial)
+- **Added**: `AuthenticationError`, `DatabaseAccessError`, `PermissionDeniedError` in
+  `src/utils.py`, all subclasses of `ConnectionError`.
+- **Changed**: `DatabaseConnection.connect()` (`src/connection.py`) now raises
+  `AuthenticationError` or `DatabaseAccessError` instead of a generic `ConnectionError`,
+  distinguished by message text as before. `DatabaseAccessError` covers SQL Server error
+  4060 ("Cannot open database"), which is worded identically whether the database
+  doesn't exist or the login just lacks access to it (by design, so an unauthorized
+  login can't tell which); the raised message says so explicitly instead of asserting
+  "not found". `execute_query()` now raises `PermissionDeniedError` for object-level
+  permission denials (e.g. `SELECT`/`EXECUTE` denied on a table or procedure).
+- **Changed**: `DatabaseExtractor.extract()` (`src/extractor.py`) no longer wraps
+  everything in one `try/except Exception → ExtractionError`. Split into three stages —
+  output-directory preparation, connect + metadata extraction, output-file writing — so
+  a connection-stage error keeps its specific type instead of being flattened, and an
+  `OSError` while writing output now raises `OutputError` (previously such errors were
+  silently absorbed into `ExtractionError`, since `OutputError` existed in `src/utils.py`
+  but was never actually raised anywhere).
+- **Changed**: `src/cli.py`'s exception→exit-code mapping now matches the scheme
+  documented in CLAUDE.md: 1 connection, 2 authentication, 3 database access,
+  4 permission denied, 5 invalid arguments, 10 extraction error, 11 output write error,
+  99 unexpected/internal error. Previously there were only 3 buckets (`ConnectionError`→1,
+  any other `SQLExtractError`→10, everything else→11), which conflated all of the above.
+  99 is a new addition to CLAUDE.md's documented scheme — none of the original codes
+  covered a genuinely unclassified exception (one that isn't any of `SQLExtractError`'s
+  subclasses or a `ValueError`).
+- **Added**: a `main()` wrapper around the Click command (renamed to `_run`) so Click's
+  own argument-validation errors (missing `--server`/`--database`, invalid `--format`
+  choice) also exit 5, instead of Click's own default exit code 2.
+- **Not done** (deliberately out of scope for this pass — see checklist above):
+  SQL syntax validation/dry-run mode, troubleshooting hints in error messages, deeper
+  argument validation (e.g. `--max-rows` range checking), progress bars.
+- **Tests**: 4 new in `tests/test_connection.py`, 5 new in `tests/test_extractor.py`,
+  new `tests/test_cli.py` (11 tests) covering the full exit-code mapping via
+  `click.testing.CliRunner`. Full suite: 133 passed, 9 skipped (need real DB).
 
 ### 2026-09-19: Full Extract/Redeploy Integration Test (Phase 4 + Phase 6 testing gaps closed)
 - **Added**: `tests/test_integration.py:TestFullRoundTrip`, a real (non-mocked) integration
@@ -631,5 +680,8 @@ ordering, CLR function metadata, database-level DDL triggers + explicit trigger 
 (Phase 4, deliberately deferred — see 2026-09-19 update). Phase 6 and Phase 4's integration
 tests are now done against a real DB (see 2026-09-19 update); Phase 7's parallel-extraction
 speedup is still unbenchmarked (needs a real DB with meaningful network/query latency).
-Phase 8 (error handling/polish) and Phase 9 (packaging/distribution) not started.
+Phase 8 (error handling/polish) is now partially started — exit codes and
+permission/database-access error mapping are done (see 2026-09-19 update); dry-run mode,
+troubleshooting hints, deeper argument validation, and progress bars remain. Phase 9
+(packaging/distribution) not started.
 **Estimated Completion**: Not re-estimated — verify remaining Phase 8-9 scope before committing to a timeline

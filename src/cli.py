@@ -176,7 +176,7 @@ def _run(
         if verbose:
             import traceback
             traceback.print_exc()
-        sys.exit(10)
+        sys.exit(99)
 
 
 def main() -> None:

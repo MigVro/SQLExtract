@@ -228,6 +228,7 @@ Return specific exit codes for CI/CD integration:
 - `5` - Invalid arguments
 - `10` - Extraction error
 - `11` - Output write error
+- `99` - Unexpected/internal error (unclassified exception)
 
 ### Security Considerations
 - Never log passwords in plain text

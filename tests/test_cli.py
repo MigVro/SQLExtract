@@ -25,7 +25,7 @@ BASE_ARGS = ['--server', 'localhost', '--database', 'TestDB', '--user', 'sa', '-
     (OutputError("write failed"), 11),
     (ExtractionError("extract failed"), 10),
     (ValueError("bad value"), 5),
-    (RuntimeError("boom"), 10),
+    (RuntimeError("boom"), 99),
 ])
 def test_exit_code_for_exception(exc, expected_code):
     """Each exception type raised by DatabaseExtractor.extract() must map to its
