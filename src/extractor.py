@@ -49,10 +49,6 @@ class DatabaseExtractor:
             clean: Delete the output directory before extraction
         """
         try:
-            if clean and os.path.exists(output_dir):
-                logger.info(f"Cleaning output directory: {output_dir}")
-                shutil.rmtree(output_dir)
-
             # Connect to database
             logger.info("Connecting to database...")
             self.connection = DatabaseConnection(self.config)
@@ -146,6 +142,10 @@ class DatabaseExtractor:
                     seed_data_by_table[f"{table.schema_name}.{table.table_name}"] = table_data
 
             # Generate SQL scripts
+            if clean and os.path.exists(output_dir):
+                logger.info(f"Cleaning output directory: {output_dir}")
+                shutil.rmtree(output_dir)
+
             logger.info("Generating SQL scripts...")
             if output_format == 'single':
                 formatter.write_single_file(
