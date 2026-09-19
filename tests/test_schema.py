@@ -411,6 +411,101 @@ class TestSchemaReader:
         assert "IN (?)" in call_args[0][0]
         assert call_args[0][1] == ("dbo",)
 
+    def test_get_user_defined_types_alias_type(self, mock_db_connection):
+        """Test getting an alias type (CREATE TYPE ... FROM base type)."""
+        mock_alias = MagicMock()
+        mock_alias.schema_name = "dbo"
+        mock_alias.type_name = "PhoneNumber"
+        mock_alias.base_type = "varchar"
+        mock_alias.max_length = 20
+        mock_alias.precision = 0
+        mock_alias.scale = 0
+        mock_alias.is_nullable = True
+
+        mock_db_connection.fetch_all.side_effect = [[mock_alias], [], []]
+
+        reader = SchemaReader(mock_db_connection)
+        types = reader.get_user_defined_types()
+
+        assert types == [{
+            'kind': 'alias',
+            'schema_name': 'dbo',
+            'type_name': 'PhoneNumber',
+            'base_type': 'varchar',
+            'max_length': 20,
+            'precision': None,
+            'scale': None,
+            'is_nullable': True
+        }]
+
+    def test_get_user_defined_types_table_type(self, mock_db_connection):
+        """Test getting a table type with its columns and primary key."""
+        mock_table_type = MagicMock()
+        mock_table_type.schema_name = "dbo"
+        mock_table_type.type_name = "IdList"
+        mock_table_type.type_table_object_id = 123
+
+        mock_column = MagicMock()
+        mock_column.column_name = "ID"
+        mock_column.data_type = "int"
+        mock_column.max_length = 4
+        mock_column.precision = 10
+        mock_column.scale = 0
+        mock_column.is_nullable = False
+        mock_column.is_identity = False
+        mock_column.is_computed = False
+        mock_column.default_value = None
+        mock_column.computed_definition = None
+
+        mock_pk = MagicMock()
+        mock_pk.column_name = "ID"
+
+        mock_db_connection.fetch_all.side_effect = [[], [mock_table_type], [mock_column], [mock_pk], []]
+
+        reader = SchemaReader(mock_db_connection)
+        types = reader.get_user_defined_types()
+
+        assert len(types) == 1
+        udt = types[0]
+        assert udt['kind'] == 'table'
+        assert udt['schema_name'] == 'dbo'
+        assert udt['type_name'] == 'IdList'
+        assert len(udt['columns']) == 1
+        assert udt['columns'][0].name == 'ID'
+        assert udt['primary_key_columns'] == ['ID']
+
+    def test_get_user_defined_types_clr_type(self, mock_db_connection):
+        """Test getting a CLR (assembly-based) type."""
+        mock_clr = MagicMock()
+        mock_clr.schema_name = "dbo"
+        mock_clr.type_name = "GeoPoint"
+        mock_clr.assembly_name = "SpatialTypes"
+        mock_clr.class_name = "SpatialTypes.GeoPoint"
+
+        mock_db_connection.fetch_all.side_effect = [[], [], [mock_clr]]
+
+        reader = SchemaReader(mock_db_connection)
+        types = reader.get_user_defined_types()
+
+        assert types == [{
+            'kind': 'clr',
+            'schema_name': 'dbo',
+            'type_name': 'GeoPoint',
+            'assembly_name': 'SpatialTypes',
+            'class_name': 'SpatialTypes.GeoPoint'
+        }]
+
+    def test_get_user_defined_types_with_filter(self, mock_db_connection):
+        """Test that schema filter is applied to the alias type query."""
+        mock_db_connection.fetch_all.side_effect = [[], [], []]
+
+        reader = SchemaReader(mock_db_connection)
+        reader.get_user_defined_types(schema_filter=["dbo"])
+
+        first_call_args = mock_db_connection.fetch_all.call_args_list[0]
+        assert "IN (?)" in first_call_args[0][0]
+        assert first_call_args[0][1] == ("dbo",)
+
     def test_get_stored_procedures_no_filter(self, mock_db_connection):
         """Test getting all stored procedures."""
         mock_proc1 = MagicMock()

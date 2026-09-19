@@ -426,6 +426,191 @@ class SchemaReader:
         logger.info(f"Found {count} extended properties (descriptions)")
         return properties
 
+    def get_user_defined_types(self, schema_filter: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """Get all user-defined types: alias types, table types, and CLR types (metadata only).
+
+        Args:
+            schema_filter: Optional list of schema names to include
+
+        Returns:
+            List of user-defined type information dictionaries, each tagged with 'kind'
+            ('alias', 'table', or 'clr'). Ordered alias types first, then table types
+            (which may reference alias types as column data types), then CLR types.
+        """
+        types: List[Dict[str, Any]] = []
+        types.extend(self._get_alias_types(schema_filter))
+        types.extend(self._get_table_types(schema_filter))
+        types.extend(self._get_clr_types(schema_filter))
+
+        logger.info(f"Found {len(types)} user-defined types")
+        return types
+
+    def _get_alias_types(self, schema_filter: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """Get alias types (CREATE TYPE ... FROM <base type>)."""
+        query = """
+        SELECT
+            s.name AS schema_name,
+            t.name AS type_name,
+            TYPE_NAME(t.system_type_id) AS base_type,
+            t.max_length,
+            t.precision,
+            t.scale,
+            t.is_nullable
+        FROM sys.types t
+        INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+        WHERE t.is_user_defined = 1 AND t.is_table_type = 0 AND t.is_assembly_type = 0
+        """
+
+        if schema_filter:
+            placeholders = ','.join(['?' for _ in schema_filter])
+            query += f" AND s.name IN ({placeholders})"
+            results = self.connection.fetch_all(query, tuple(schema_filter))
+        else:
+            results = self.connection.fetch_all(query)
+
+        alias_types = []
+        for row in results:
+            max_length = row.max_length
+            if row.base_type in ('nvarchar', 'nchar'):
+                max_length = max_length // 2 if max_length > 0 else max_length
+
+            alias_types.append({
+                'kind': 'alias',
+                'schema_name': row.schema_name,
+                'type_name': row.type_name,
+                'base_type': row.base_type,
+                'max_length': max_length if max_length >= 0 else None,
+                'precision': row.precision if row.precision > 0 else None,
+                'scale': row.scale if row.scale > 0 else None,
+                'is_nullable': bool(row.is_nullable)
+            })
+
+        return alias_types
+
+    def _get_table_types(self, schema_filter: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """Get table types (CREATE TYPE ... AS TABLE (...))."""
+        query = """
+        SELECT
+            s.name AS schema_name,
+            tt.name AS type_name,
+            tt.type_table_object_id
+        FROM sys.table_types tt
+        INNER JOIN sys.schemas s ON tt.schema_id = s.schema_id
+        WHERE tt.is_user_defined = 1
+        """
+
+        if schema_filter:
+            placeholders = ','.join(['?' for _ in schema_filter])
+            query += f" AND s.name IN ({placeholders})"
+            results = self.connection.fetch_all(query, tuple(schema_filter))
+        else:
+            results = self.connection.fetch_all(query)
+
+        table_types = []
+        for row in results:
+            table_types.append({
+                'kind': 'table',
+                'schema_name': row.schema_name,
+                'type_name': row.type_name,
+                'columns': self._get_table_type_columns(row.type_table_object_id),
+                'primary_key_columns': self._get_table_type_primary_key(row.type_table_object_id)
+            })
+
+        return table_types
+
+    def _get_table_type_columns(self, object_id: int) -> List[ColumnInfo]:
+        """Get columns for a table type by its type_table_object_id."""
+        query = """
+        SELECT
+            c.name AS column_name,
+            TYPE_NAME(c.user_type_id) AS data_type,
+            c.max_length,
+            c.precision,
+            c.scale,
+            c.is_nullable,
+            c.is_identity,
+            c.is_computed,
+            dc.definition AS default_value,
+            cc.definition AS computed_definition
+        FROM sys.columns c
+        LEFT JOIN sys.default_constraints dc ON c.default_object_id = dc.object_id
+        LEFT JOIN sys.computed_columns cc ON c.object_id = cc.object_id AND c.column_id = cc.column_id
+        WHERE c.object_id = ?
+        ORDER BY c.column_id
+        """
+
+        results = self.connection.fetch_all(query, (object_id,))
+
+        columns = []
+        for row in results:
+            max_length = row.max_length
+            if row.data_type in ('nvarchar', 'nchar'):
+                max_length = max_length // 2 if max_length > 0 else max_length
+
+            columns.append(ColumnInfo(
+                name=row.column_name,
+                data_type=row.data_type,
+                max_length=max_length if max_length >= 0 else None,
+                precision=row.precision if row.precision > 0 else None,
+                scale=row.scale if row.scale > 0 else None,
+                is_nullable=row.is_nullable,
+                is_identity=row.is_identity,
+                is_computed=row.is_computed,
+                default_value=row.default_value,
+                computed_definition=row.computed_definition
+            ))
+
+        return columns
+
+    def _get_table_type_primary_key(self, object_id: int) -> List[str]:
+        """Get primary key column names for a table type, in key order."""
+        query = """
+        SELECT c.name AS column_name
+        FROM sys.indexes i
+        INNER JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+        INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+        WHERE i.object_id = ? AND i.is_primary_key = 1
+        ORDER BY ic.key_ordinal
+        """
+
+        results = self.connection.fetch_all(query, (object_id,))
+        return [row.column_name for row in results]
+
+    def _get_clr_types(self, schema_filter: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """Get CLR (assembly-based) types. Metadata only - not enough to regenerate the
+        assembly itself, so no CREATE TYPE statement is produced for these.
+        """
+        query = """
+        SELECT
+            s.name AS schema_name,
+            t.name AS type_name,
+            a.name AS assembly_name,
+            at.assembly_class AS class_name
+        FROM sys.types t
+        INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+        INNER JOIN sys.assembly_types at ON t.user_type_id = at.user_type_id
+        INNER JOIN sys.assemblies a ON at.assembly_id = a.assembly_id
+        WHERE t.is_assembly_type = 1
+        """
+
+        if schema_filter:
+            placeholders = ','.join(['?' for _ in schema_filter])
+            query += f" AND s.name IN ({placeholders})"
+            results = self.connection.fetch_all(query, tuple(schema_filter))
+        else:
+            results = self.connection.fetch_all(query)
+
+        return [
+            {
+                'kind': 'clr',
+                'schema_name': row.schema_name,
+                'type_name': row.type_name,
+                'assembly_name': row.assembly_name,
+                'class_name': row.class_name
+            }
+            for row in results
+        ]
+
     def get_stored_procedures(self, schema_filter: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """Get all stored procedures from database.
 

@@ -220,7 +220,7 @@
 
 ---
 
-## Phase 7: Advanced Features (Week 7) - IN PROGRESS
+## Phase 7: Advanced Features (Week 7) - COMPLETE
 
 ### Sequence Extraction ✅
 - [x] Extract sequences (`src/schema.py: get_sequences`, not a standalone `src/sequences.py`)
@@ -230,10 +230,15 @@
   - [x] CACHE / NO CACHE, and non-default data type (incl. `decimal`/`numeric` precision/scale)
 - [x] Generate `CREATE SEQUENCE` statements
 
-### User-Defined Type Extraction
-- [ ] Extract user-defined table types
-- [ ] Extract alias types
-- [ ] Extract CLR types (metadata only)
+### User-Defined Type Extraction ✅
+- [x] Extract user-defined table types (`src/schema.py: get_user_defined_types` /
+      `_get_table_types`), including columns and an inline `PRIMARY KEY` clause if the
+      table type has one. Unique/check constraints on table types are not extracted.
+- [x] Extract alias types (`_get_alias_types`) — `CREATE TYPE ... FROM <base type>`
+- [x] Extract CLR types (metadata only) (`_get_clr_types`) — emitted as a comment with
+      the assembly/class name, not a `CREATE TYPE ... EXTERNAL NAME` statement, since
+      recreating the type requires deploying the assembly first (out of scope)
+- [x] Generate `CREATE TYPE` statements (alias and table types)
 
 ### Extended Properties ✅
 - [x] Extract table descriptions (`src/schema.py: get_extended_properties`)
@@ -242,14 +247,25 @@
       restores the descriptions as real MS_Description metadata on redeploy, visible in
       SSMS; see 2026-09-19 update)
 
-### Parallel Extraction (Optional)
-- [ ] Extract objects in parallel using threading/multiprocessing
-- [ ] Benchmark performance improvement
+### Parallel Extraction (Optional) ✅
+- [x] Extract objects in parallel using threading (`DatabaseExtractor._run_jobs` in
+      `src/extractor.py`) — each of the 15 independent, schema-filtered metadata queries
+      (schemas, types, sequences, tables, extended properties, constraints, indexes,
+      views, view dependencies, procedures, functions, triggers) and each table's seed
+      data extraction runs on its own `DatabaseConnection` via `ThreadPoolExecutor`,
+      since pyodbc connections/cursors aren't thread-safe and can't be shared across
+      threads. `--no-parallel` (CLI) / `parallel=False` (API) falls back to the original
+      sequential behavior on a single shared connection. Default: parallel, 8 workers
+      (`--max-workers`).
+- [ ] Benchmark performance improvement — not done; needs a real DB with meaningful
+      network/query latency to be meaningful (mocked unit tests can't show a real
+      speedup). See Phase 6 Testing for the same "needs a real DB" caveat.
 
 ### Testing
 - [x] Unit tests for sequence extraction (`tests/test_schema.py`, `tests/test_formatter.py`)
 - [x] Unit tests for extended properties (`tests/test_schema.py`, `tests/test_formatter.py`)
-- [ ] Unit tests for remaining advanced features (UDTs, parallel extraction)
+- [x] Unit tests for user-defined types (`tests/test_schema.py`, `tests/test_formatter.py`)
+- [x] Unit tests for parallel/sequential job execution (`tests/test_extractor.py`)
 - [ ] Integration tests
 
 ---
@@ -415,6 +431,43 @@ Before releasing v1.0:
 
 ## Recent Updates
 
+### 2026-09-19: User-Defined Types and Parallel Extraction (Phase 7 complete)
+- **Added**: `SchemaReader.get_user_defined_types()` in `src/schema.py`, covering three
+  kinds (`kind` field): `alias` (`sys.types`, `CREATE TYPE ... FROM <base type>`), `table`
+  (`sys.table_types` + `sys.columns` + an inline `PRIMARY KEY` from `sys.indexes`,
+  `CREATE TYPE ... AS TABLE`), and `clr` (`sys.assembly_types`, metadata only — emitted
+  as a comment, since recreating it needs the assembly deployed first, out of scope).
+- **Added**: `SQLFormatter.format_user_defined_type()` (+ `_format_alias_type`,
+  `_format_table_type`, `_format_clr_type_comment`). Refactored `_format_data_type` to
+  take plain values instead of a `ColumnInfo`, and extracted `_format_column_def`, so
+  both `format_table` and the new table-type formatting share the same column-rendering
+  logic.
+- **Wired into**: all three output formats and `write_readme()`. Types are extracted and
+  written *before* sequences/tables, since a column's data type may reference one.
+- **Breaking change**: modular output filenames renumbered again — `02_CREATE_TYPES.sql`
+  is new; sequences/tables/constraints/indexes/triggers/views/procedures/functions/
+  deferred-FKs/seed-data all shifted up by one (03-12, previously 02-11).
+- **Added**: `DatabaseExtractor._run_jobs()` in `src/extractor.py` — runs the 15
+  independent, schema-filtered metadata queries (and, when extracting seed data, each
+  table's data pull) concurrently via `ThreadPoolExecutor`, each on its own
+  `DatabaseConnection` (pyodbc connections/cursors are not thread-safe, so they can't be
+  shared across threads). New `parallel: bool = True` / `max_workers: int = 8` params on
+  `DatabaseExtractor.extract()`, and `--no-parallel` / `--max-workers` CLI flags. Output
+  is identical either way — only the extraction strategy changes; results are
+  reassembled in dependency order, not completion order.
+- **Added**: `DatabaseConnection.label` — each per-job connection is now tagged with its
+  job name (e.g. `[tables]`, `[triggers]`) and every log line from that connection
+  (connecting, established, retrying, closed) is prefixed with it, so the many
+  concurrent "Connecting..." / "Connection established" log lines from parallel
+  extraction can be told apart.
+- **Not done**: benchmarking the actual speedup — needs a real DB with real network/query
+  latency to be meaningful, same caveat as the Phase 6 integration tests.
+- **Tests**: 4 new unit tests in `tests/test_schema.py`, 7 new in `tests/test_formatter.py`,
+  4 new in `tests/test_extractor.py`, 1 new in `tests/test_connection.py` (label
+  prefixing), plus a manual end-to-end smoke test of the full `extract()` pipeline with
+  a mocked connection (types file, table file, deploy scripts, parallel execution all
+  verified). Full suite: 114 passed, 4 skipped (need real DB).
+
 ### 2026-09-19: Extended Properties (Table/Column Descriptions)
 - **Added**: `SchemaReader.get_extended_properties()` in `src/schema.py`, querying
   `sys.extended_properties` (`class = 1`, `name = 'MS_Description'`) joined to
@@ -532,8 +585,9 @@ Before releasing v1.0:
 ---
 
 **Last Updated**: 2026-09-19
-**Status**: Phases 1, 2, 3, 5, 6 Complete; Phase 4 Mostly Complete; Phase 7 In Progress (sequences + extended properties done)
+**Status**: Phases 1, 2, 3, 5, 6, 7 Complete; Phase 4 Mostly Complete
 **Current Phase**: Remaining gaps: database-level DDL triggers + explicit trigger order
 (Phase 4, deliberately deferred — see 2026-09-19 update); Phase 6 integration/deploy tests
-still need a real DB; Phase 7 UDTs and parallel extraction not started.
-**Estimated Completion**: Not re-estimated — verify remaining Phase 7-9 scope before committing to a timeline
+still need a real DB; Phase 7's parallel-extraction speedup is unbenchmarked (also needs a
+real DB). Phase 8 (error handling/polish) and Phase 9 (packaging/distribution) not started.
+**Estimated Completion**: Not re-estimated — verify remaining Phase 8-9 scope before committing to a timeline

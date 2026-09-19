@@ -26,6 +26,8 @@ logger = get_logger(__name__)
 @click.option('--seed-data', is_flag=True, help='Extract seed data from tables')
 @click.option('--tables', help='Comma-separated list of tables for seed data (format: schema.table)')
 @click.option('--max-rows', type=int, help='Maximum rows per table for seed data')
+@click.option('--no-parallel', is_flag=True, help='Disable parallel extraction (use a single database connection)')
+@click.option('--max-workers', type=int, default=8, help='Maximum concurrent database connections when running in parallel (default: 8)')
 @click.option('--verbose', '-v', is_flag=True, help='Verbose logging')
 @click.option('--quiet', '-q', is_flag=True, help='Quiet mode (errors only)')
 @click.option('--log-file', help='Log to file')
@@ -47,6 +49,8 @@ def main(
     seed_data: bool,
     tables: str,
     max_rows: int,
+    no_parallel: bool,
+    max_workers: int,
     verbose: bool,
     quiet: bool,
     log_file: str
@@ -122,7 +126,9 @@ def main(
             output_format=output_format,
             clean=clean,
             omit_ts=omit_ts,
-            no_header=no_header
+            no_header=no_header,
+            parallel=not no_parallel,
+            max_workers=max_workers
         )
 
         click.echo(f"\n✓ Extraction complete! SQL scripts written to: {output}")

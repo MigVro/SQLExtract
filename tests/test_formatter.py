@@ -102,6 +102,56 @@ class TestSQLFormatter:
 
         assert "Customer''s orders." in sql
 
+    def test_format_user_defined_type_alias(self):
+        """Test formatting an alias type as CREATE TYPE ... FROM <base type>."""
+        formatter = SQLFormatter("/tmp/test")
+
+        udt = {
+            'kind': 'alias', 'schema_name': 'dbo', 'type_name': 'PhoneNumber',
+            'base_type': 'varchar', 'max_length': 20, 'precision': None, 'scale': None,
+            'is_nullable': True
+        }
+
+        sql = formatter.format_user_defined_type(udt)
+
+        assert "CREATE TYPE [dbo].[PhoneNumber]" in sql
+        assert "FROM varchar(20) NULL" in sql
+
+    def test_format_user_defined_type_table(self):
+        """Test formatting a table type as CREATE TYPE ... AS TABLE, including inline PRIMARY KEY."""
+        formatter = SQLFormatter("/tmp/test")
+
+        col = ColumnInfo(
+            name="ID", data_type="int", max_length=None, precision=None, scale=None,
+            is_nullable=False, is_identity=False, is_computed=False,
+            default_value=None, computed_definition=None
+        )
+        udt = {
+            'kind': 'table', 'schema_name': 'dbo', 'type_name': 'IdList',
+            'columns': [col], 'primary_key_columns': ['ID']
+        }
+
+        sql = formatter.format_user_defined_type(udt)
+
+        assert "CREATE TYPE [dbo].[IdList] AS TABLE" in sql
+        assert "[ID] int NOT NULL" in sql
+        assert "PRIMARY KEY ([ID])" in sql
+
+    def test_format_user_defined_type_clr(self):
+        """Test that a CLR type is emitted as a metadata comment, not a CREATE TYPE statement."""
+        formatter = SQLFormatter("/tmp/test")
+
+        udt = {
+            'kind': 'clr', 'schema_name': 'dbo', 'type_name': 'GeoPoint',
+            'assembly_name': 'SpatialTypes', 'class_name': 'SpatialTypes.GeoPoint'
+        }
+
+        sql = formatter.format_user_defined_type(udt)
+
+        assert sql.startswith("--")
+        assert "CREATE TYPE [dbo].[GeoPoint]" not in sql
+        assert "SpatialTypes" in sql
+
     def test_format_table(self):
         """Test formatting table CREATE statement."""
         formatter = SQLFormatter("/tmp/test")
@@ -239,27 +289,53 @@ class TestSQLFormatter:
             table = TableInfo(schema_name="dbo", table_name="Config", columns=[col])
 
             formatter.write_modular_format(
-                schemas=[], sequences=[], tables=[table], extended_properties={},
+                schemas=[], user_defined_types=[], sequences=[], tables=[table], extended_properties={},
                 primary_keys=[], foreign_keys=[],
                 deferred_foreign_keys=[], unique_constraints=[], check_constraints=[],
                 indexes=[], views=[], procedures=[], functions=[], triggers=[],
                 seed_data=[]
             )
 
-            # Only tables were provided, so only 03_CREATE_TABLES.sql should exist
+            # Only tables were provided, so only 04_CREATE_TABLES.sql should exist
             # and be the only entry in the deploy scripts.
-            assert os.path.exists(os.path.join(tmpdir, '03_CREATE_TABLES.sql'))
+            assert os.path.exists(os.path.join(tmpdir, '04_CREATE_TABLES.sql'))
             assert not os.path.exists(os.path.join(tmpdir, '01_CREATE_SCHEMAS.sql'))
 
             sh_content = Path(tmpdir, 'deploy.sh').read_text(encoding='utf-8')
-            assert '03_CREATE_TABLES.sql' in sh_content
+            assert '04_CREATE_TABLES.sql' in sh_content
             assert '01_CREATE_SCHEMAS.sql' not in sh_content
             assert 'sqlcmd' in sh_content
 
             ps1_content = Path(tmpdir, 'deploy.ps1').read_text(encoding='utf-8')
-            assert '03_CREATE_TABLES.sql' in ps1_content
+            assert '04_CREATE_TABLES.sql' in ps1_content
             assert '01_CREATE_SCHEMAS.sql' not in ps1_content
             assert 'sqlcmd' in ps1_content
+
+    def test_write_modular_format_writes_types_file(self):
+        """Test that user-defined types are written to their own numbered modular file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            formatter = SQLFormatter(tmpdir)
+
+            udt = {
+                'kind': 'alias', 'schema_name': 'dbo', 'type_name': 'PhoneNumber',
+                'base_type': 'varchar', 'max_length': 20, 'precision': None, 'scale': None,
+                'is_nullable': True
+            }
+
+            formatter.write_modular_format(
+                schemas=[], user_defined_types=[udt], sequences=[], tables=[], extended_properties={},
+                primary_keys=[], foreign_keys=[],
+                deferred_foreign_keys=[], unique_constraints=[], check_constraints=[],
+                indexes=[], views=[], procedures=[], functions=[], triggers=[],
+                seed_data=[]
+            )
+
+            assert os.path.exists(os.path.join(tmpdir, '02_CREATE_TYPES.sql'))
+            content = Path(tmpdir, '02_CREATE_TYPES.sql').read_text(encoding='utf-8')
+            assert "CREATE TYPE [dbo].[PhoneNumber]" in content
+
+            sh_content = Path(tmpdir, 'deploy.sh').read_text(encoding='utf-8')
+            assert '02_CREATE_TYPES.sql' in sh_content
 
     def test_write_modular_format_includes_extended_properties(self):
         """Test that table/column descriptions are written into the tables file."""
@@ -277,14 +353,14 @@ class TestSQLFormatter:
             }
 
             formatter.write_modular_format(
-                schemas=[], sequences=[], tables=[table], extended_properties=extended_properties,
+                schemas=[], user_defined_types=[], sequences=[], tables=[table], extended_properties=extended_properties,
                 primary_keys=[], foreign_keys=[],
                 deferred_foreign_keys=[], unique_constraints=[], check_constraints=[],
                 indexes=[], views=[], procedures=[], functions=[], triggers=[],
                 seed_data=[]
             )
 
-            content = Path(tmpdir, '03_CREATE_TABLES.sql').read_text(encoding='utf-8')
+            content = Path(tmpdir, '04_CREATE_TABLES.sql').read_text(encoding='utf-8')
             assert "sp_addextendedproperty" in content
             assert "App configuration." in content
             assert "Row identifier." in content
@@ -304,7 +380,7 @@ class TestSQLFormatter:
 
             formatter.write_readme(
                 output_format='modular',
-                schemas=[], sequences=[], tables=[table], views=[view], procedures=[], functions=[],
+                schemas=[], user_defined_types=[], sequences=[], tables=[table], views=[view], procedures=[], functions=[],
                 triggers=[], indexes=[], deferred_foreign_keys=[], has_seed_data=True
             )
 

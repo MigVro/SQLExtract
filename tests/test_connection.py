@@ -133,6 +133,31 @@ class TestDatabaseConnection:
         mock_cursor.execute.assert_called_with("SELECT 1")
 
     @patch('src.connection.pyodbc.connect')
+    def test_connect_with_label_prefixes_log_messages(self, mock_connect, caplog):
+        """Test that a label, when given, is included in the connect/close log messages."""
+        import logging
+
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = (1,)
+
+        mock_conn = MagicMock()
+        mock_conn.cursor.return_value = mock_cursor
+        mock_connect.return_value = mock_conn
+
+        config = ConnectionConfig(
+            server="localhost", database="TestDB", user="sa", password="TestPass", trust_cert=True
+        )
+
+        db_conn = DatabaseConnection(config, label="tables")
+        with caplog.at_level(logging.INFO):
+            db_conn.connect()
+            db_conn.close()
+
+        assert any("[tables] Connecting to" in message for message in caplog.messages)
+        assert any("[tables] Connection established successfully" in message for message in caplog.messages)
+        assert any("[tables] Connection closed" in message for message in caplog.messages)
+
+    @patch('src.connection.pyodbc.connect')
     def test_connect_authentication_failure(self, mock_connect):
         """Test connection failure due to authentication."""
         mock_connect.side_effect = pyodbc.Error("Login failed for user 'sa'")

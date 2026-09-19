@@ -66,17 +66,23 @@ class ConnectionConfig:
 class DatabaseConnection:
     """Manage database connection with retry logic."""
 
-    def __init__(self, config: ConnectionConfig, max_retries: int = 3):
+    def __init__(self, config: ConnectionConfig, max_retries: int = 3, label: Optional[str] = None):
         """Initialize connection manager.
 
         Args:
             config: Connection configuration
             max_retries: Maximum number of connection retry attempts
+            label: Optional identifier included in log messages, to tell apart the
+                many connections opened during parallel extraction
         """
         self.config = config
         self.max_retries = max_retries
+        self.label = label
         self.connection: Optional[pyodbc.Connection] = None
         self.cursor: Optional[pyodbc.Cursor] = None
+
+    def _log_prefix(self) -> str:
+        return f"[{self.label}] " if self.label else ""
 
     def connect(self) -> None:
         """Establish database connection with retry logic.
@@ -85,10 +91,11 @@ class DatabaseConnection:
             ConnError: If connection fails after all retries
         """
         connection_string = self.config.to_connection_string()
+        prefix = self._log_prefix()
 
         for attempt in range(1, self.max_retries + 1):
             try:
-                logger.info(f"Connecting to {self.config.server}/{self.config.database} (attempt {attempt}/{self.max_retries})")
+                logger.info(f"{prefix}Connecting to {self.config.server}/{self.config.database} (attempt {attempt}/{self.max_retries})")
 
                 self.connection = pyodbc.connect(
                     connection_string,
@@ -100,7 +107,7 @@ class DatabaseConnection:
                 self.cursor.execute("SELECT 1")
                 self.cursor.fetchone()
 
-                logger.info("Connection established successfully")
+                logger.info(f"{prefix}Connection established successfully")
                 return
 
             except pyodbc.Error as e:
@@ -114,7 +121,7 @@ class DatabaseConnection:
 
                 if attempt < self.max_retries:
                     wait_time = 2 ** attempt  # Exponential backoff
-                    logger.warning(f"Connection failed: {error_msg}. Retrying in {wait_time}s...")
+                    logger.warning(f"{prefix}Connection failed: {error_msg}. Retrying in {wait_time}s...")
                     time.sleep(wait_time)
                 else:
                     raise ConnError(f"Connection failed after {self.max_retries} attempts: {error_msg}")
@@ -179,7 +186,7 @@ class DatabaseConnection:
         if self.connection:
             self.connection.close()
             self.connection = None
-            logger.info("Connection closed")
+            logger.info(f"{self._log_prefix()}Connection closed")
 
     def __enter__(self):
         """Context manager entry."""

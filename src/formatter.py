@@ -87,29 +87,87 @@ GO
         """
         lines = []
         lines.append(f"CREATE TABLE {escape_sql_identifier(table.schema_name)}.{escape_sql_identifier(table.table_name)} (")
+        lines.append(',\n'.join(self._format_column_def(col) for col in table.columns))
+        lines.append(")")
+        lines.append("GO")
 
-        column_defs = []
-        for col in table.columns:
-            col_def = f"    {escape_sql_identifier(col.name)} {self._format_data_type(col)}"
+        return '\n'.join(lines)
 
-            if col.is_identity:
-                col_def += " IDENTITY(1,1)"
+    def _format_column_def(self, col: ColumnInfo) -> str:
+        """Format a single column definition line for a CREATE TABLE/TYPE statement.
 
-            if col.is_computed:
-                col_def += f" AS {col.computed_definition}"
-            else:
-                col_def += " NULL" if col.is_nullable else " NOT NULL"
+        Args:
+            col: Column information
 
-                if col.default_value:
-                    col_def += f" DEFAULT {col.default_value}"
+        Returns:
+            Column definition, indented with 4 spaces
+        """
+        col_def = f"    {escape_sql_identifier(col.name)} {self._format_data_type(col.data_type, col.max_length, col.precision, col.scale)}"
 
-            column_defs.append(col_def)
+        if col.is_identity:
+            col_def += " IDENTITY(1,1)"
+
+        if col.is_computed:
+            col_def += f" AS {col.computed_definition}"
+        else:
+            col_def += " NULL" if col.is_nullable else " NOT NULL"
+
+            if col.default_value:
+                col_def += f" DEFAULT {col.default_value}"
+
+        return col_def
+
+    def format_user_defined_type(self, udt: Dict[str, Any]) -> str:
+        """Generate a CREATE TYPE statement (or, for CLR types, a metadata comment).
+
+        Args:
+            udt: User-defined type information, as returned by
+                SchemaReader.get_user_defined_types() (tagged with 'kind')
+
+        Returns:
+            SQL statement
+        """
+        if udt['kind'] == 'alias':
+            return self._format_alias_type(udt)
+        elif udt['kind'] == 'table':
+            return self._format_table_type(udt)
+        else:
+            return self._format_clr_type_comment(udt)
+
+    def _format_alias_type(self, udt: Dict[str, Any]) -> str:
+        """Generate CREATE TYPE ... FROM <base type> statement for an alias type."""
+        type_suffix = self._format_data_type(udt['base_type'], udt['max_length'], udt['precision'], udt['scale'])
+        null_clause = "NULL" if udt['is_nullable'] else "NOT NULL"
+
+        return f"""
+CREATE TYPE {escape_sql_identifier(udt['schema_name'])}.{escape_sql_identifier(udt['type_name'])}
+FROM {type_suffix} {null_clause}
+GO
+"""
+
+    def _format_table_type(self, udt: Dict[str, Any]) -> str:
+        """Generate CREATE TYPE ... AS TABLE statement for a table type."""
+        lines = [f"CREATE TYPE {escape_sql_identifier(udt['schema_name'])}.{escape_sql_identifier(udt['type_name'])} AS TABLE ("]
+
+        column_defs = [self._format_column_def(col) for col in udt['columns']]
+
+        if udt['primary_key_columns']:
+            pk_columns = ', '.join(escape_sql_identifier(c) for c in udt['primary_key_columns'])
+            column_defs.append(f"    PRIMARY KEY ({pk_columns})")
 
         lines.append(',\n'.join(column_defs))
         lines.append(")")
         lines.append("GO")
 
         return '\n'.join(lines)
+
+    def _format_clr_type_comment(self, udt: Dict[str, Any]) -> str:
+        """Generate a metadata comment for a CLR type (not enough info to recreate the assembly)."""
+        return (
+            f"-- CLR type {udt['schema_name']}.{udt['type_name']} "
+            f"(assembly '{udt['assembly_name']}', class '{udt['class_name']}') - metadata only; "
+            "deploy the assembly and run CREATE TYPE ... EXTERNAL NAME manually.\n"
+        )
 
     def format_extended_properties(self, schema_name: str, table_name: str, properties: Dict[str, Any]) -> str:
         """Generate sp_addextendedproperty statements for a table's MS_Description properties.
@@ -147,36 +205,43 @@ GO
 
         return '\n'.join(statements)
 
-    def _format_data_type(self, col: ColumnInfo) -> str:
-        """Format column data type.
+    def _format_data_type(
+        self,
+        data_type: str,
+        max_length: Optional[int],
+        precision: Optional[int],
+        scale: Optional[int]
+    ) -> str:
+        """Format a data type with its length/precision/scale suffix.
 
         Args:
-            col: Column information
+            data_type: Base data type name
+            max_length: Max length (for character/binary types)
+            precision: Precision (for decimal/numeric types)
+            scale: Scale (for decimal/numeric/datetime2/time/datetimeoffset types)
 
         Returns:
             Formatted data type string
         """
-        data_type = col.data_type
-
-        if col.data_type in ('varchar', 'nvarchar', 'char', 'nchar', 'varbinary', 'binary'):
-            if col.max_length == -1:
+        if data_type in ('varchar', 'nvarchar', 'char', 'nchar', 'varbinary', 'binary'):
+            if max_length == -1:
                 return f"{data_type}(MAX)"
-            elif col.max_length:
-                return f"{data_type}({col.max_length})"
+            elif max_length:
+                return f"{data_type}({max_length})"
             else:
                 return data_type
 
-        elif col.data_type in ('decimal', 'numeric'):
-            if col.precision and col.scale is not None:
-                return f"{data_type}({col.precision},{col.scale})"
-            elif col.precision:
-                return f"{data_type}({col.precision})"
+        elif data_type in ('decimal', 'numeric'):
+            if precision and scale is not None:
+                return f"{data_type}({precision},{scale})"
+            elif precision:
+                return f"{data_type}({precision})"
             else:
                 return data_type
 
-        elif col.data_type in ('datetime2', 'time', 'datetimeoffset'):
-            if col.scale is not None:
-                return f"{data_type}({col.scale})"
+        elif data_type in ('datetime2', 'time', 'datetimeoffset'):
+            if scale is not None:
+                return f"{data_type}({scale})"
             else:
                 return data_type
 
@@ -384,6 +449,7 @@ GO
     def write_single_file(
         self,
         schemas: List[SchemaInfo],
+        user_defined_types: List[Dict[str, Any]],
         sequences: List[Dict[str, Any]],
         tables: List[TableInfo],
         extended_properties: Dict[Tuple[str, str], Dict[str, Any]],
@@ -403,6 +469,7 @@ GO
 
         Args:
             schemas: List of schemas
+            user_defined_types: List of user-defined types (alias, table, CLR)
             sequences: List of sequences
             tables: List of tables
             extended_properties: Table/column descriptions keyed by (schema_name, table_name)
@@ -428,6 +495,12 @@ GO
                 f.write("-- SCHEMAS\n\n")
                 for schema in schemas:
                     f.write(self.format_schema(schema))
+                    f.write("\n")
+
+            if user_defined_types:
+                f.write("-- USER-DEFINED TYPES\n\n")
+                for udt in user_defined_types:
+                    f.write(self.format_user_defined_type(udt))
                     f.write("\n")
 
             if sequences:
@@ -517,6 +590,7 @@ GO
     def write_per_object_format(
         self,
         schemas: List[SchemaInfo],
+        user_defined_types: List[Dict[str, Any]],
         sequences: List[Dict[str, Any]],
         tables: List[TableInfo],
         extended_properties: Dict[Tuple[str, str], Dict[str, Any]],
@@ -536,6 +610,7 @@ GO
 
         Args:
             schemas: List of schemas
+            user_defined_types: List of user-defined types (alias, table, CLR)
             sequences: List of sequences
             tables: List of tables
             extended_properties: Table/column descriptions keyed by (schema_name, table_name)
@@ -562,6 +637,9 @@ GO
 
         for schema in schemas:
             write_object('Schemas', schema.name, self.format_schema(schema))
+
+        for udt in user_defined_types:
+            write_object('Types', f"{udt['schema_name']}.{udt['type_name']}", self.format_user_defined_type(udt))
 
         for seq in sequences:
             write_object('Sequences', f"{seq['schema_name']}.{seq['sequence_name']}", self.format_sequence(seq))
@@ -612,6 +690,7 @@ GO
     def write_modular_format(
         self,
         schemas: List[SchemaInfo],
+        user_defined_types: List[Dict[str, Any]],
         sequences: List[Dict[str, Any]],
         tables: List[TableInfo],
         extended_properties: Dict[Tuple[str, str], Dict[str, Any]],
@@ -631,6 +710,7 @@ GO
 
         Args:
             schemas: List of schemas
+            user_defined_types: List of user-defined types (alias, table, CLR)
             sequences: List of sequences
             tables: List of tables
             extended_properties: Table/column descriptions keyed by (schema_name, table_name)
@@ -660,9 +740,20 @@ GO
                     f.write("\n")
             written_files.append(filename)
 
-        # 02: Sequences
+        # 02: User-defined types
+        if user_defined_types:
+            filename = '02_CREATE_TYPES.sql'
+            with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
+                f.write(header)
+                f.write("-- USER-DEFINED TYPES\n\n")
+                for udt in user_defined_types:
+                    f.write(self.format_user_defined_type(udt))
+                    f.write("\n")
+            written_files.append(filename)
+
+        # 03: Sequences
         if sequences:
-            filename = '02_CREATE_SEQUENCES.sql'
+            filename = '03_CREATE_SEQUENCES.sql'
             with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- SEQUENCES\n\n")
@@ -671,9 +762,9 @@ GO
                     f.write("\n")
             written_files.append(filename)
 
-        # 03: Tables
+        # 04: Tables
         if tables:
-            filename = '03_CREATE_TABLES.sql'
+            filename = '04_CREATE_TABLES.sql'
             with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- TABLES\n\n")
@@ -686,9 +777,9 @@ GO
                         f.write("\n")
             written_files.append(filename)
 
-        # 04: Constraints (PK, FK, Unique, Check)
+        # 05: Constraints (PK, FK, Unique, Check)
         if primary_keys or foreign_keys or unique_constraints or check_constraints:
-            filename = '04_CREATE_CONSTRAINTS.sql'
+            filename = '05_CREATE_CONSTRAINTS.sql'
             with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
 
@@ -719,9 +810,9 @@ GO
                         f.write("\n")
             written_files.append(filename)
 
-        # 05: Indexes
+        # 06: Indexes
         if indexes:
-            filename = '05_CREATE_INDEXES.sql'
+            filename = '06_CREATE_INDEXES.sql'
             with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- INDEXES\n\n")
@@ -730,9 +821,9 @@ GO
                     f.write("\n")
             written_files.append(filename)
 
-        # 06: Triggers
+        # 07: Triggers
         if triggers:
-            filename = '06_CREATE_TRIGGERS.sql'
+            filename = '07_CREATE_TRIGGERS.sql'
             with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- TRIGGERS\n\n")
@@ -741,9 +832,9 @@ GO
                     f.write("\n")
             written_files.append(filename)
 
-        # 07: Views
+        # 08: Views
         if views:
-            filename = '07_CREATE_VIEWS.sql'
+            filename = '08_CREATE_VIEWS.sql'
             with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- VIEWS\n\n")
@@ -752,9 +843,9 @@ GO
                     f.write("\n")
             written_files.append(filename)
 
-        # 08: Procedures
+        # 09: Procedures
         if procedures:
-            filename = '08_CREATE_PROCEDURES.sql'
+            filename = '09_CREATE_PROCEDURES.sql'
             with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- STORED PROCEDURES\n\n")
@@ -763,9 +854,9 @@ GO
                     f.write("\n")
             written_files.append(filename)
 
-        # 09: Functions
+        # 10: Functions
         if functions:
-            filename = '09_CREATE_FUNCTIONS.sql'
+            filename = '10_CREATE_FUNCTIONS.sql'
             with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- FUNCTIONS\n\n")
@@ -774,9 +865,9 @@ GO
                     f.write("\n")
             written_files.append(filename)
 
-        # 10: Deferred foreign keys (for circular dependencies)
+        # 11: Deferred foreign keys (for circular dependencies)
         if deferred_foreign_keys:
-            filename = '10_CREATE_DEFERRED_FKS.sql'
+            filename = '11_CREATE_DEFERRED_FKS.sql'
             with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- DEFERRED FOREIGN KEYS (Circular Dependencies)\n\n")
@@ -785,9 +876,9 @@ GO
                     f.write("\n")
             written_files.append(filename)
 
-        # 11: Seed data
+        # 12: Seed data
         if seed_data:
-            filename = '11_SEED_DATA.sql'
+            filename = '12_SEED_DATA.sql'
             with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- SEED DATA\n\n")
@@ -884,6 +975,7 @@ GO
         self,
         output_format: str,
         schemas: List[SchemaInfo],
+        user_defined_types: List[Dict[str, Any]],
         sequences: List[Dict[str, Any]],
         tables: List[TableInfo],
         views: List[Dict[str, Any]],
@@ -899,6 +991,7 @@ GO
         Args:
             output_format: 'single', 'per-object', or 'modular'
             schemas: List of schemas
+            user_defined_types: List of user-defined types (alias, table, CLR)
             sequences: List of sequences
             tables: List of tables (in dependency order)
             views: List of views (in dependency order)
@@ -918,6 +1011,7 @@ GO
         lines.append("## Objects")
         lines.append("")
         lines.append(f"- Schemas: {len(schemas)}")
+        lines.append(f"- User-Defined Types: {len(user_defined_types)}")
         lines.append(f"- Sequences: {len(sequences)}")
         lines.append(f"- Tables: {len(tables)}")
         lines.append(f"- Indexes: {len(indexes)}")
@@ -936,6 +1030,7 @@ GO
                 lines.append(f"- {name_fn(item)}")
             lines.append("")
 
+        list_section("User-Defined Types", user_defined_types, lambda u: f"{u['schema_name']}.{u['type_name']} ({u['kind']})")
         list_section("Sequences", sequences, lambda s: f"{s['schema_name']}.{s['sequence_name']}")
         list_section("Tables", tables, lambda t: f"{t.schema_name}.{t.table_name}")
         list_section("Views", views, lambda v: f"{v['schema_name']}.{v['view_name']}")
