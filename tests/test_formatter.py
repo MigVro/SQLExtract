@@ -31,6 +31,43 @@ class TestSQLFormatter:
         assert "MQTT" in sql
         assert "sys.schemas" in sql
 
+    def test_format_sequence_default_bigint(self):
+        """Test formatting a sequence with the default bigint type omits the AS clause."""
+        formatter = SQLFormatter("/tmp/test")
+
+        seq = {
+            'schema_name': 'dbo', 'sequence_name': 'seq_OrderNumbers', 'data_type': 'bigint',
+            'precision': 19, 'scale': 0, 'start_value': 1, 'increment': 1,
+            'minimum_value': 1, 'maximum_value': 9223372036854775807,
+            'is_cycling': False, 'is_cached': True, 'cache_size': 50
+        }
+
+        sql = formatter.format_sequence(seq)
+
+        assert "CREATE SEQUENCE [dbo].[seq_OrderNumbers]" in sql
+        assert " AS " not in sql.split("START WITH")[0]
+        assert "START WITH 1" in sql
+        assert "INCREMENT BY 1" in sql
+        assert "NO CYCLE" in sql
+        assert "CACHE 50" in sql
+
+    def test_format_sequence_non_default_type_and_cycle(self):
+        """Test formatting a non-bigint, cycling, uncached sequence."""
+        formatter = SQLFormatter("/tmp/test")
+
+        seq = {
+            'schema_name': 'dbo', 'sequence_name': 'seq_SmallCounter', 'data_type': 'int',
+            'precision': 10, 'scale': 0, 'start_value': 1, 'increment': 1,
+            'minimum_value': 1, 'maximum_value': 100,
+            'is_cycling': True, 'is_cached': False, 'cache_size': None
+        }
+
+        sql = formatter.format_sequence(seq)
+
+        assert "AS int" in sql
+        assert "CYCLE" in sql and "NO CYCLE" not in sql
+        assert "NO CACHE" in sql
+
     def test_format_table(self):
         """Test formatting table CREATE statement."""
         formatter = SQLFormatter("/tmp/test")
@@ -168,24 +205,24 @@ class TestSQLFormatter:
             table = TableInfo(schema_name="dbo", table_name="Config", columns=[col])
 
             formatter.write_modular_format(
-                schemas=[], tables=[table], primary_keys=[], foreign_keys=[],
+                schemas=[], sequences=[], tables=[table], primary_keys=[], foreign_keys=[],
                 deferred_foreign_keys=[], unique_constraints=[], check_constraints=[],
                 indexes=[], views=[], procedures=[], functions=[], triggers=[],
                 seed_data=[]
             )
 
-            # Only tables were provided, so only 02_CREATE_TABLES.sql should exist
+            # Only tables were provided, so only 03_CREATE_TABLES.sql should exist
             # and be the only entry in the deploy scripts.
-            assert os.path.exists(os.path.join(tmpdir, '02_CREATE_TABLES.sql'))
+            assert os.path.exists(os.path.join(tmpdir, '03_CREATE_TABLES.sql'))
             assert not os.path.exists(os.path.join(tmpdir, '01_CREATE_SCHEMAS.sql'))
 
             sh_content = Path(tmpdir, 'deploy.sh').read_text(encoding='utf-8')
-            assert '02_CREATE_TABLES.sql' in sh_content
+            assert '03_CREATE_TABLES.sql' in sh_content
             assert '01_CREATE_SCHEMAS.sql' not in sh_content
             assert 'sqlcmd' in sh_content
 
             ps1_content = Path(tmpdir, 'deploy.ps1').read_text(encoding='utf-8')
-            assert '02_CREATE_TABLES.sql' in ps1_content
+            assert '03_CREATE_TABLES.sql' in ps1_content
             assert '01_CREATE_SCHEMAS.sql' not in ps1_content
             assert 'sqlcmd' in ps1_content
 
@@ -204,7 +241,7 @@ class TestSQLFormatter:
 
             formatter.write_readme(
                 output_format='modular',
-                schemas=[], tables=[table], views=[view], procedures=[], functions=[],
+                schemas=[], sequences=[], tables=[table], views=[view], procedures=[], functions=[],
                 triggers=[], indexes=[], deferred_foreign_keys=[], has_seed_data=True
             )
 

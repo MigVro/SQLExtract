@@ -220,14 +220,15 @@
 
 ---
 
-## Phase 7: Advanced Features (Week 7)
+## Phase 7: Advanced Features (Week 7) - IN PROGRESS
 
-### Sequence Extraction
-- [ ] Extract sequences (`src/sequences.py`)
-  - [ ] START WITH, INCREMENT BY
-  - [ ] MIN/MAX values
-  - [ ] CYCLE option
-- [ ] Generate `CREATE SEQUENCE` statements
+### Sequence Extraction ✅
+- [x] Extract sequences (`src/schema.py: get_sequences`, not a standalone `src/sequences.py`)
+  - [x] START WITH, INCREMENT BY
+  - [x] MIN/MAX values
+  - [x] CYCLE option
+  - [x] CACHE / NO CACHE, and non-default data type (incl. `decimal`/`numeric` precision/scale)
+- [x] Generate `CREATE SEQUENCE` statements
 
 ### User-Defined Type Extraction
 - [ ] Extract user-defined table types
@@ -244,7 +245,8 @@
 - [ ] Benchmark performance improvement
 
 ### Testing
-- [ ] Unit tests for all advanced features
+- [x] Unit tests for sequence extraction (`tests/test_schema.py`, `tests/test_formatter.py`)
+- [ ] Unit tests for remaining advanced features (UDTs, extended properties, parallel extraction)
 - [ ] Integration tests
 
 ---
@@ -410,6 +412,22 @@ Before releasing v1.0:
 
 ## Recent Updates
 
+### 2026-09-19: Sequence Extraction
+- **Added**: `SchemaReader.get_sequences()` in `src/schema.py`, querying `sys.sequences`
+  for START WITH, INCREMENT BY, MIN/MAX values, CYCLE, CACHE/NO CACHE, and data type
+  (including `decimal`/`numeric` precision/scale via `sys.sequences.precision`/`.scale`).
+- **Added**: `SQLFormatter.format_sequence()` — emits `CREATE SEQUENCE`, omitting the
+  `AS <type>` clause only for the default `bigint`.
+- **Wired into**: all three output formats and `write_readme()`. Sequences are extracted
+  and written *before* tables, since a column's `DEFAULT NEXT VALUE FOR <sequence>` needs
+  the sequence to already exist.
+- **Breaking change**: modular output filenames renumbered again — `02_CREATE_SEQUENCES.sql`
+  is new; tables/constraints/indexes/triggers/views/procedures/functions/deferred-FKs/
+  seed-data all shifted up by one (03-11, previously 02-10).
+- **Tests**: 2 new unit tests in `tests/test_schema.py`, 2 new in `tests/test_formatter.py`,
+  plus a manual end-to-end smoke test of the modular output, deploy script, and README.
+  Full suite: 96 passed, 4 skipped (need real DB).
+
 ### 2026-09-19: Deployment Scripts and README Generation
 - **Added**: `SQLFormatter._write_deploy_scripts()`, called from `write_modular_format()`.
   Generates `deploy.sh` and `deploy.ps1` listing only the numbered `.sql` files that were
@@ -492,8 +510,8 @@ Before releasing v1.0:
 ---
 
 **Last Updated**: 2026-09-19
-**Status**: Phases 1, 2, 3, 5, 6 Complete; Phase 4 Mostly Complete
+**Status**: Phases 1, 2, 3, 5, 6 Complete; Phase 4 Mostly Complete; Phase 7 In Progress (sequences done)
 **Current Phase**: Remaining gaps: database-level DDL triggers + explicit trigger order
 (Phase 4, deliberately deferred — see 2026-09-19 update); Phase 6 integration/deploy tests
-still need a real DB. Phase 7 (sequences, UDTs, extended properties) not started.
+still need a real DB; Phase 7 UDTs, extended properties, and parallel extraction not started.
 **Estimated Completion**: Not re-estimated — verify remaining Phase 7-9 scope before committing to a timeline

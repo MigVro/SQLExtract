@@ -175,6 +175,62 @@ class SchemaReader:
 
         return columns
 
+    def get_sequences(self, schema_filter: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """Get all sequences from database.
+
+        Args:
+            schema_filter: Optional list of schema names to include
+
+        Returns:
+            List of sequence information dictionaries
+        """
+        query = """
+        SELECT
+            s.name AS schema_name,
+            seq.name AS sequence_name,
+            TYPE_NAME(seq.system_type_id) AS data_type,
+            seq.precision,
+            seq.scale,
+            seq.start_value,
+            seq.increment,
+            seq.minimum_value,
+            seq.maximum_value,
+            seq.is_cycling,
+            seq.is_cached,
+            seq.cache_size
+        FROM sys.sequences seq
+        INNER JOIN sys.schemas s ON seq.schema_id = s.schema_id
+        WHERE seq.is_ms_shipped = 0
+        """
+
+        if schema_filter:
+            placeholders = ','.join(['?' for _ in schema_filter])
+            query += f" AND s.name IN ({placeholders})"
+            results = self.connection.fetch_all(query, tuple(schema_filter))
+        else:
+            results = self.connection.fetch_all(query)
+
+        sequences = [
+            {
+                'schema_name': row.schema_name,
+                'sequence_name': row.sequence_name,
+                'data_type': row.data_type,
+                'precision': row.precision,
+                'scale': row.scale,
+                'start_value': row.start_value,
+                'increment': row.increment,
+                'minimum_value': row.minimum_value,
+                'maximum_value': row.maximum_value,
+                'is_cycling': bool(row.is_cycling),
+                'is_cached': bool(row.is_cached),
+                'cache_size': row.cache_size
+            }
+            for row in results
+        ]
+
+        logger.info(f"Found {len(sequences)} sequences")
+        return sequences
+
     def get_views(self, schema_filter: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """Get all views from database.
 

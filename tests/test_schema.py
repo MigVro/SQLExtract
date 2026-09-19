@@ -261,6 +261,48 @@ class TestSchemaReader:
 
         assert columns[0].max_length is None  # MAX should be None
 
+    def test_get_sequences_no_filter(self, mock_db_connection):
+        """Test getting all sequences."""
+        mock_seq1 = MagicMock()
+        mock_seq1.schema_name = "dbo"
+        mock_seq1.sequence_name = "seq_OrderNumbers"
+        mock_seq1.data_type = "bigint"
+        mock_seq1.precision = 19
+        mock_seq1.scale = 0
+        mock_seq1.start_value = 1
+        mock_seq1.increment = 1
+        mock_seq1.minimum_value = 1
+        mock_seq1.maximum_value = 9223372036854775807
+        mock_seq1.is_cycling = False
+        mock_seq1.is_cached = True
+        mock_seq1.cache_size = 50
+
+        mock_db_connection.fetch_all.return_value = [mock_seq1]
+
+        reader = SchemaReader(mock_db_connection)
+        sequences = reader.get_sequences()
+
+        assert len(sequences) == 1
+        assert sequences[0]['schema_name'] == "dbo"
+        assert sequences[0]['sequence_name'] == "seq_OrderNumbers"
+        assert sequences[0]['data_type'] == "bigint"
+        assert sequences[0]['start_value'] == 1
+        assert sequences[0]['increment'] == 1
+        assert sequences[0]['is_cycling'] is False
+        assert sequences[0]['is_cached'] is True
+        assert sequences[0]['cache_size'] == 50
+
+    def test_get_sequences_with_filter(self, mock_db_connection):
+        """Test getting sequences with schema filter."""
+        mock_db_connection.fetch_all.return_value = []
+
+        reader = SchemaReader(mock_db_connection)
+        reader.get_sequences(schema_filter=["dbo"])
+
+        call_args = mock_db_connection.fetch_all.call_args
+        assert "IN (?)" in call_args[0][0]
+        assert call_args[0][1] == ("dbo",)
+
     def test_get_views_no_filter(self, mock_db_connection):
         """Test getting all views."""
         mock_view1 = MagicMock()

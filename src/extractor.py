@@ -69,6 +69,11 @@ class DatabaseExtractor:
             logger.info("Extracting schemas...")
             schemas = schema_reader.get_schemas(schema_filter)
 
+            # Extract sequences (extracted before tables, since a column's DEFAULT
+            # may reference a sequence via NEXT VALUE FOR)
+            logger.info("Extracting sequences...")
+            sequences = schema_reader.get_sequences(schema_filter)
+
             # Extract tables
             logger.info("Extracting tables...")
             tables = schema_reader.get_tables(schema_filter)
@@ -161,6 +166,7 @@ class DatabaseExtractor:
             if output_format == 'single':
                 formatter.write_single_file(
                     schemas=schemas,
+                    sequences=sequences,
                     tables=ordered_tables,
                     primary_keys=primary_keys,
                     foreign_keys=foreign_keys,
@@ -177,6 +183,7 @@ class DatabaseExtractor:
             elif output_format == 'per-object':
                 formatter.write_per_object_format(
                     schemas=schemas,
+                    sequences=sequences,
                     tables=ordered_tables,
                     primary_keys=primary_keys,
                     foreign_keys=foreign_keys,
@@ -193,6 +200,7 @@ class DatabaseExtractor:
             else:
                 formatter.write_modular_format(
                     schemas=schemas,
+                    sequences=sequences,
                     tables=ordered_tables,
                     primary_keys=primary_keys,
                     foreign_keys=foreign_keys,
@@ -210,6 +218,7 @@ class DatabaseExtractor:
             formatter.write_readme(
                 output_format=output_format,
                 schemas=schemas,
+                sequences=sequences,
                 tables=ordered_tables,
                 views=views,
                 procedures=procedures,

@@ -44,6 +44,38 @@ END
 GO
 """
 
+    def format_sequence(self, seq: Dict[str, Any]) -> str:
+        """Generate CREATE SEQUENCE statement.
+
+        Args:
+            seq: Sequence information dictionary
+
+        Returns:
+            SQL statement
+        """
+        data_type = seq['data_type']
+
+        if data_type in ('decimal', 'numeric') and seq.get('precision') and seq.get('scale') is not None:
+            type_clause = f" AS {data_type}({seq['precision']},{seq['scale']})"
+        elif data_type != 'bigint':
+            type_clause = f" AS {data_type}"
+        else:
+            type_clause = ""
+
+        cycle_clause = "CYCLE" if seq['is_cycling'] else "NO CYCLE"
+        cache_clause = f"CACHE {seq['cache_size']}" if seq['is_cached'] else "NO CACHE"
+
+        return f"""
+CREATE SEQUENCE {escape_sql_identifier(seq['schema_name'])}.{escape_sql_identifier(seq['sequence_name'])}{type_clause}
+START WITH {seq['start_value']}
+INCREMENT BY {seq['increment']}
+MINVALUE {seq['minimum_value']}
+MAXVALUE {seq['maximum_value']}
+{cycle_clause}
+{cache_clause}
+GO
+"""
+
     def format_table(self, table: TableInfo) -> str:
         """Generate CREATE TABLE statement.
 
@@ -316,6 +348,7 @@ GO
     def write_single_file(
         self,
         schemas: List[SchemaInfo],
+        sequences: List[Dict[str, Any]],
         tables: List[TableInfo],
         primary_keys: List[PrimaryKeyInfo],
         foreign_keys: List[ForeignKeyInfo],
@@ -333,6 +366,7 @@ GO
 
         Args:
             schemas: List of schemas
+            sequences: List of sequences
             tables: List of tables
             primary_keys: List of primary keys
             foreign_keys: List of foreign keys
@@ -356,6 +390,12 @@ GO
                 f.write("-- SCHEMAS\n\n")
                 for schema in schemas:
                     f.write(self.format_schema(schema))
+                    f.write("\n")
+
+            if sequences:
+                f.write("-- SEQUENCES\n\n")
+                for seq in sequences:
+                    f.write(self.format_sequence(seq))
                     f.write("\n")
 
             if tables:
@@ -435,6 +475,7 @@ GO
     def write_per_object_format(
         self,
         schemas: List[SchemaInfo],
+        sequences: List[Dict[str, Any]],
         tables: List[TableInfo],
         primary_keys: List[PrimaryKeyInfo],
         foreign_keys: List[ForeignKeyInfo],
@@ -452,6 +493,7 @@ GO
 
         Args:
             schemas: List of schemas
+            sequences: List of sequences
             tables: List of tables
             primary_keys: List of primary keys
             foreign_keys: List of foreign keys
@@ -476,6 +518,9 @@ GO
 
         for schema in schemas:
             write_object('Schemas', schema.name, self.format_schema(schema))
+
+        for seq in sequences:
+            write_object('Sequences', f"{seq['schema_name']}.{seq['sequence_name']}", self.format_sequence(seq))
 
         for table in tables:
             write_object('Tables', f"{table.schema_name}.{table.table_name}", self.format_table(table))
@@ -519,6 +564,7 @@ GO
     def write_modular_format(
         self,
         schemas: List[SchemaInfo],
+        sequences: List[Dict[str, Any]],
         tables: List[TableInfo],
         primary_keys: List[PrimaryKeyInfo],
         foreign_keys: List[ForeignKeyInfo],
@@ -536,6 +582,7 @@ GO
 
         Args:
             schemas: List of schemas
+            sequences: List of sequences
             tables: List of tables
             primary_keys: List of primary keys
             foreign_keys: List of foreign keys
@@ -563,9 +610,20 @@ GO
                     f.write("\n")
             written_files.append(filename)
 
-        # 02: Tables
+        # 02: Sequences
+        if sequences:
+            filename = '02_CREATE_SEQUENCES.sql'
+            with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
+                f.write(header)
+                f.write("-- SEQUENCES\n\n")
+                for seq in sequences:
+                    f.write(self.format_sequence(seq))
+                    f.write("\n")
+            written_files.append(filename)
+
+        # 03: Tables
         if tables:
-            filename = '02_CREATE_TABLES.sql'
+            filename = '03_CREATE_TABLES.sql'
             with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- TABLES\n\n")
@@ -574,9 +632,9 @@ GO
                     f.write("\n")
             written_files.append(filename)
 
-        # 03: Constraints (PK, FK, Unique, Check)
+        # 04: Constraints (PK, FK, Unique, Check)
         if primary_keys or foreign_keys or unique_constraints or check_constraints:
-            filename = '03_CREATE_CONSTRAINTS.sql'
+            filename = '04_CREATE_CONSTRAINTS.sql'
             with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
 
@@ -607,9 +665,9 @@ GO
                         f.write("\n")
             written_files.append(filename)
 
-        # 04: Indexes
+        # 05: Indexes
         if indexes:
-            filename = '04_CREATE_INDEXES.sql'
+            filename = '05_CREATE_INDEXES.sql'
             with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- INDEXES\n\n")
@@ -618,9 +676,9 @@ GO
                     f.write("\n")
             written_files.append(filename)
 
-        # 05: Triggers
+        # 06: Triggers
         if triggers:
-            filename = '05_CREATE_TRIGGERS.sql'
+            filename = '06_CREATE_TRIGGERS.sql'
             with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- TRIGGERS\n\n")
@@ -629,9 +687,9 @@ GO
                     f.write("\n")
             written_files.append(filename)
 
-        # 06: Views
+        # 07: Views
         if views:
-            filename = '06_CREATE_VIEWS.sql'
+            filename = '07_CREATE_VIEWS.sql'
             with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- VIEWS\n\n")
@@ -640,9 +698,9 @@ GO
                     f.write("\n")
             written_files.append(filename)
 
-        # 07: Procedures
+        # 08: Procedures
         if procedures:
-            filename = '07_CREATE_PROCEDURES.sql'
+            filename = '08_CREATE_PROCEDURES.sql'
             with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- STORED PROCEDURES\n\n")
@@ -651,9 +709,9 @@ GO
                     f.write("\n")
             written_files.append(filename)
 
-        # 08: Functions
+        # 09: Functions
         if functions:
-            filename = '08_CREATE_FUNCTIONS.sql'
+            filename = '09_CREATE_FUNCTIONS.sql'
             with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- FUNCTIONS\n\n")
@@ -662,9 +720,9 @@ GO
                     f.write("\n")
             written_files.append(filename)
 
-        # 09: Deferred foreign keys (for circular dependencies)
+        # 10: Deferred foreign keys (for circular dependencies)
         if deferred_foreign_keys:
-            filename = '09_CREATE_DEFERRED_FKS.sql'
+            filename = '10_CREATE_DEFERRED_FKS.sql'
             with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- DEFERRED FOREIGN KEYS (Circular Dependencies)\n\n")
@@ -673,9 +731,9 @@ GO
                     f.write("\n")
             written_files.append(filename)
 
-        # 10: Seed data
+        # 11: Seed data
         if seed_data:
-            filename = '10_SEED_DATA.sql'
+            filename = '11_SEED_DATA.sql'
             with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- SEED DATA\n\n")
@@ -772,6 +830,7 @@ GO
         self,
         output_format: str,
         schemas: List[SchemaInfo],
+        sequences: List[Dict[str, Any]],
         tables: List[TableInfo],
         views: List[Dict[str, Any]],
         procedures: List[Dict[str, Any]],
@@ -786,6 +845,7 @@ GO
         Args:
             output_format: 'single', 'per-object', or 'modular'
             schemas: List of schemas
+            sequences: List of sequences
             tables: List of tables (in dependency order)
             views: List of views (in dependency order)
             procedures: List of procedures
@@ -804,6 +864,7 @@ GO
         lines.append("## Objects")
         lines.append("")
         lines.append(f"- Schemas: {len(schemas)}")
+        lines.append(f"- Sequences: {len(sequences)}")
         lines.append(f"- Tables: {len(tables)}")
         lines.append(f"- Indexes: {len(indexes)}")
         lines.append(f"- Views: {len(views)}")
@@ -821,6 +882,7 @@ GO
                 lines.append(f"- {name_fn(item)}")
             lines.append("")
 
+        list_section("Sequences", sequences, lambda s: f"{s['schema_name']}.{s['sequence_name']}")
         list_section("Tables", tables, lambda t: f"{t.schema_name}.{t.table_name}")
         list_section("Views", views, lambda v: f"{v['schema_name']}.{v['view_name']}")
         list_section("Stored Procedures", procedures, lambda p: f"{p['schema_name']}.{p['procedure_name']}")
