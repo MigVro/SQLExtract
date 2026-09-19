@@ -288,7 +288,10 @@
       (not upfront validation) — an invalid entry there is dropped with a warning,
       not a hard failure (explicit decision, not an oversight)
 - [ ] SQL syntax validation (dry-run mode)
-- [ ] Detailed error messages with troubleshooting hints
+- [x] Detailed error messages with troubleshooting hints — each `except` branch in
+      `src/cli.py`'s `_run()` prints a one-line `Hint:` tailored to that exit code
+      (e.g. check firewall/port for connection errors, check credentials for auth
+      errors, rerun with `--verbose` for unclassified ones)
 
 ### Logging and Progress
 - [x] Progress bars for long operations (using `tqdm` or `rich`) — `create_progress()`
@@ -448,6 +451,17 @@ Before releasing v1.0:
 ---
 
 ## Recent Updates
+
+### 2026-09-19: Troubleshooting Hints in Error Messages (Phase 8, partial)
+- **Added**: a `Hint:` line under each exception branch in `src/cli.py`'s `_run()`,
+  tailored to that exit code — e.g. connection errors point at
+  `--server`/`--port`/firewall, authentication errors point at credentials and
+  SQL-auth being enabled, database-access errors mention the 4060 ambiguity, output
+  errors point at disk space/permissions on `--output`, and the unclassified (99)
+  branch suggests `--verbose` and reporting a bug.
+- **Tests**: extended the existing exit-code parametrized test in `tests/test_cli.py`
+  to also assert `"Hint:"` appears in the output for every exception type. Full suite:
+  138 passed, 9 skipped (need real DB).
 
 ### 2026-09-19: Deeper Argument Validation (Phase 8, partial)
 - **Added**: range checks in `src/cli.py`'s `_run()`, alongside the existing
@@ -721,7 +735,7 @@ ordering, CLR function metadata, database-level DDL triggers + explicit trigger 
 tests are now done against a real DB (see 2026-09-19 update); Phase 7's parallel-extraction
 speedup is still unbenchmarked (needs a real DB with meaningful network/query latency).
 Phase 8 (error handling/polish) is now partially started — exit codes,
-permission/database-access error mapping, progress bars, and numeric argument validation
-are done (see 2026-09-19 updates); dry-run mode and troubleshooting hints remain.
+permission/database-access error mapping, progress bars, numeric argument validation,
+and troubleshooting hints are done (see 2026-09-19 updates); dry-run mode remains.
 Phase 9 (packaging/distribution) not started.
 **Estimated Completion**: Not re-estimated — verify remaining Phase 8-9 scope before committing to a timeline

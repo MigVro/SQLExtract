@@ -35,6 +35,7 @@ def test_exit_code_for_exception(exc, expected_code):
         MockExtractor.return_value.extract.side_effect = exc
         result = runner.invoke(_run, BASE_ARGS)
     assert result.exit_code == expected_code
+    assert "Hint:" in result.output
 
 
 def test_success_exits_0(tmp_path):

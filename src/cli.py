@@ -158,34 +158,49 @@ def _run(
 
     except AuthenticationError as e:
         click.echo(f"\n✗ Authentication Error: {e}", err=True)
+        click.echo("Hint: check --user/--password are correct, and that SQL Server "
+                    "Authentication is enabled on the server (not Windows-only).", err=True)
         sys.exit(2)
 
     except DatabaseAccessError as e:
         click.echo(f"\n✗ Database Not Found: {e}", err=True)
+        click.echo("Hint: check --database is spelled correctly, and that this login "
+                    "has been granted access to it (SQL Server reports both cases identically).", err=True)
         sys.exit(3)
 
     except PermissionDeniedError as e:
         click.echo(f"\n✗ Permission Denied: {e}", err=True)
+        click.echo("Hint: ask a DBA to grant this login the missing permission on the "
+                    "object named above.", err=True)
         sys.exit(4)
 
     except ConnError as e:
         click.echo(f"\n✗ Connection Error: {e}", err=True)
+        click.echo("Hint: verify --server/--port are correct, the SQL Server instance "
+                    "accepts remote TCP connections, and no firewall is blocking it.", err=True)
         sys.exit(1)
 
     except OutputError as e:
         click.echo(f"\n✗ Output Error: {e}", err=True)
+        click.echo("Hint: check that --output is writable and there is enough disk "
+                    "space, and that no other process has files there open.", err=True)
         sys.exit(11)
 
     except SQLExtractError as e:
         click.echo(f"\n✗ Extraction Error: {e}", err=True)
+        click.echo("Hint: rerun with --verbose for the full error, and --log-file to "
+                    "save it.", err=True)
         sys.exit(10)
 
     except ValueError as e:
         click.echo(f"\n✗ Invalid Arguments: {e}", err=True)
+        click.echo("Hint: run --help to check the expected format for this option.", err=True)
         sys.exit(5)
 
     except Exception as e:
         click.echo(f"\n✗ Unexpected Error: {e}", err=True)
+        click.echo("Hint: rerun with --verbose for a full traceback; this may be a bug "
+                    "worth reporting.", err=True)
         if verbose:
             import traceback
             traceback.print_exc()
