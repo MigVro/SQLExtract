@@ -1,6 +1,6 @@
 """Schema introspection and metadata extraction."""
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from dataclasses import dataclass
 from .connection import DatabaseConnection
 from .utils import get_logger
@@ -216,6 +216,44 @@ class SchemaReader:
 
         logger.info(f"Found {len(views)} views")
         return views
+
+    def get_view_dependencies(self, schema_filter: Optional[List[str]] = None) -> List[Tuple[str, str, str, str]]:
+        """Get view-to-view dependencies (views referenced by other views).
+
+        Args:
+            schema_filter: Optional list of schema names to include
+
+        Returns:
+            List of (schema_name, view_name, referenced_schema_name, referenced_view_name) tuples
+        """
+        query = """
+        SELECT
+            s1.name AS schema_name,
+            o1.name AS view_name,
+            s2.name AS referenced_schema_name,
+            o2.name AS referenced_view_name
+        FROM sys.sql_expression_dependencies d
+        INNER JOIN sys.objects o1 ON d.referencing_id = o1.object_id
+        INNER JOIN sys.schemas s1 ON o1.schema_id = s1.schema_id
+        INNER JOIN sys.objects o2 ON d.referenced_id = o2.object_id
+        INNER JOIN sys.schemas s2 ON o2.schema_id = s2.schema_id
+        WHERE o1.type = 'V' AND o2.type = 'V' AND o1.object_id <> o2.object_id
+        """
+
+        if schema_filter:
+            placeholders = ','.join(['?' for _ in schema_filter])
+            query += f" AND s1.name IN ({placeholders})"
+            results = self.connection.fetch_all(query, tuple(schema_filter))
+        else:
+            results = self.connection.fetch_all(query)
+
+        dependencies = [
+            (row.schema_name, row.view_name, row.referenced_schema_name, row.referenced_view_name)
+            for row in results
+        ]
+
+        logger.info(f"Found {len(dependencies)} view-to-view dependencies")
+        return dependencies
 
     def get_stored_procedures(self, schema_filter: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """Get all stored procedures from database.

@@ -7,7 +7,7 @@ from .connection import DatabaseConnection, ConnectionConfig
 from .schema import SchemaReader
 from .constraints import ConstraintExtractor
 from .indexes import IndexExtractor
-from .dependency import order_tables_by_dependency
+from .dependency import order_tables_by_dependency, order_views_by_dependency
 from .seed_data import SeedDataExtractor
 from .formatter import SQLFormatter
 from .utils import get_logger, ExtractionError
@@ -93,9 +93,12 @@ class DatabaseExtractor:
             logger.info("Extracting indexes...")
             indexes = index_extractor.get_indexes(schema_filter)
 
-            # Extract views
+            # Extract views and order them by dependency (a view referencing
+            # another view must be created after the view it references)
             logger.info("Extracting views...")
             views = schema_reader.get_views(schema_filter)
+            view_dependencies = schema_reader.get_view_dependencies(schema_filter)
+            views = order_views_by_dependency(views, view_dependencies)
 
             # Extract stored procedures
             logger.info("Extracting stored procedures...")

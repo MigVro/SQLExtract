@@ -90,7 +90,7 @@
 
 ---
 
-## Phase 3: Index and View Extraction (Week 3) - MOSTLY COMPLETE
+## Phase 3: Index and View Extraction (Week 3) ✅ COMPLETE
 
 ### Index Extraction ✅
 - [x] Extract all indexes (`src/indexes.py`)
@@ -102,12 +102,12 @@
 - [x] Exclude PK/unique constraint indexes (already scripted)
 - [x] Generate `CREATE INDEX` statements
 
-### View Extraction
+### View Extraction ✅
 - [x] Extract view definitions (`src/schema.py: get_views`, not a standalone `src/views.py`)
   - [x] Use `sys.sql_modules` definition
   - [x] Handle SCHEMABINDING (definition captured as-is)
   - [x] Handle indexed views (definition captured as-is)
-- [ ] Order views by dependencies (not implemented — `src/dependency.py` only orders tables/FKs)
+- [x] Order views by dependencies (`src/schema.py: get_view_dependencies` + `src/dependency.py: order_views_by_dependency`)
 - [x] Generate `CREATE VIEW` statements
 
 ### Testing ✅
@@ -408,6 +408,18 @@ Before releasing v1.0:
 
 ## Recent Updates
 
+### 2026-09-19: View Dependency Ordering
+- **Added**: `SchemaReader.get_view_dependencies()` in `src/schema.py`, querying
+  `sys.sql_expression_dependencies` for view-to-view references.
+- **Added**: `order_views_by_dependency()` in `src/dependency.py`, reusing the existing
+  `DependencyGraph`/topological sort to order a view after any view it references.
+  Falls back to original order with a warning if a circular dependency is ever found
+  (shouldn't happen — SQL Server doesn't allow circular view creation).
+- **Wired into**: `DatabaseExtractor.extract()` in `src/extractor.py`, so all three
+  output formats now emit views in dependency-safe order.
+- **Tests**: 2 new unit tests in `tests/test_schema.py`, 5 new unit tests in
+  `tests/test_dependency.py`. Full suite: 84 passed, 4 skipped (need real DB).
+
 ### 2026-09-19: Checklist Reconciled with Actual Code State
 - **Found**: This checklist had drifted significantly from the codebase (no updates since 2025-10-09).
 - **Phase 4** (procedures/functions): largely implemented, but in `src/schema.py` + `src/formatter.py`
@@ -442,7 +454,6 @@ Before releasing v1.0:
 ---
 
 **Last Updated**: 2026-09-19
-**Status**: Phases 1, 2, 5 Complete; Phases 3, 4, 6 Mostly/Partially Complete
-**Current Phase**: Remaining gaps: trigger extraction (Phase 4), view dependency ordering (Phase 3),
-deployment script + README generation (Phase 6)
+**Status**: Phases 1, 2, 3, 5 Complete; Phases 4, 6 Partially/Mostly Complete
+**Current Phase**: Remaining gaps: trigger extraction (Phase 4), deployment script + README generation (Phase 6)
 **Estimated Completion**: Not re-estimated — verify remaining Phase 7-9 scope before committing to a timeline

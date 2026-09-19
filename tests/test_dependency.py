@@ -1,7 +1,12 @@
 """Tests for dependency analysis module."""
 
 import pytest
-from src.dependency import DependencyGraph, build_dependency_graph, order_tables_by_dependency
+from src.dependency import (
+    DependencyGraph,
+    build_dependency_graph,
+    order_tables_by_dependency,
+    order_views_by_dependency,
+)
 from src.constraints import ForeignKeyInfo
 
 
@@ -497,3 +502,86 @@ class TestOrderTablesByDependency:
         for schema, table in ordered_tables:
             assert isinstance(schema, str)
             assert isinstance(table, str)
+
+
+class TestOrderViewsByDependency:
+    """Test order_views_by_dependency function."""
+
+    def test_order_simple_view_dependency(self):
+        """Test ordering views where one view references another."""
+        views = [
+            {"schema_name": "dbo", "view_name": "vwSummary", "definition": "..."},
+            {"schema_name": "dbo", "view_name": "vwBase", "definition": "..."},
+        ]
+
+        # vwSummary references vwBase
+        dependencies = [("dbo", "vwSummary", "dbo", "vwBase")]
+
+        ordered_views = order_views_by_dependency(views, dependencies)
+
+        assert len(ordered_views) == 2
+        base_idx = next(i for i, v in enumerate(ordered_views) if v["view_name"] == "vwBase")
+        summary_idx = next(i for i, v in enumerate(ordered_views) if v["view_name"] == "vwSummary")
+        assert base_idx < summary_idx
+
+    def test_order_views_no_dependencies(self):
+        """Test ordering views with no dependencies preserves all views."""
+        views = [
+            {"schema_name": "dbo", "view_name": "vwA", "definition": "..."},
+            {"schema_name": "dbo", "view_name": "vwB", "definition": "..."},
+        ]
+
+        ordered_views = order_views_by_dependency(views, [])
+
+        assert len(ordered_views) == 2
+        names = {v["view_name"] for v in ordered_views}
+        assert names == {"vwA", "vwB"}
+
+    def test_order_views_chain(self):
+        """Test ordering a chain of view dependencies."""
+        views = [
+            {"schema_name": "dbo", "view_name": "vwLevel3", "definition": "..."},
+            {"schema_name": "dbo", "view_name": "vwLevel1", "definition": "..."},
+            {"schema_name": "dbo", "view_name": "vwLevel2", "definition": "..."},
+        ]
+
+        # Level3 -> Level2 -> Level1
+        dependencies = [
+            ("dbo", "vwLevel3", "dbo", "vwLevel2"),
+            ("dbo", "vwLevel2", "dbo", "vwLevel1"),
+        ]
+
+        ordered_views = order_views_by_dependency(views, dependencies)
+
+        idx = {v["view_name"]: i for i, v in enumerate(ordered_views)}
+        assert idx["vwLevel1"] < idx["vwLevel2"] < idx["vwLevel3"]
+
+    def test_order_views_ignores_dependency_on_filtered_out_view(self):
+        """Test that a dependency on a view outside the extracted set is ignored, not an error."""
+        views = [
+            {"schema_name": "dbo", "view_name": "vwSummary", "definition": "..."},
+        ]
+
+        # References a view that isn't in the extracted set (e.g. excluded by --schemas)
+        dependencies = [("dbo", "vwSummary", "other", "vwExcluded")]
+
+        ordered_views = order_views_by_dependency(views, dependencies)
+
+        assert len(ordered_views) == 1
+        assert ordered_views[0]["view_name"] == "vwSummary"
+
+    def test_order_views_circular_dependency_falls_back(self):
+        """Test that a circular view dependency falls back to the original order instead of failing."""
+        views = [
+            {"schema_name": "dbo", "view_name": "vwA", "definition": "..."},
+            {"schema_name": "dbo", "view_name": "vwB", "definition": "..."},
+        ]
+
+        dependencies = [
+            ("dbo", "vwA", "dbo", "vwB"),
+            ("dbo", "vwB", "dbo", "vwA"),
+        ]
+
+        ordered_views = order_views_by_dependency(views, dependencies)
+
+        assert ordered_views == views

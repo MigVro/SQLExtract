@@ -303,6 +303,32 @@ class TestSchemaReader:
         assert "IN (?)" in call_args[0][0]
         assert call_args[0][1] == ("MQTT",)
 
+    def test_get_view_dependencies_no_filter(self, mock_db_connection):
+        """Test getting view-to-view dependencies."""
+        mock_dep = MagicMock()
+        mock_dep.schema_name = "dbo"
+        mock_dep.view_name = "vwSummary"
+        mock_dep.referenced_schema_name = "dbo"
+        mock_dep.referenced_view_name = "vwBase"
+
+        mock_db_connection.fetch_all.return_value = [mock_dep]
+
+        reader = SchemaReader(mock_db_connection)
+        dependencies = reader.get_view_dependencies()
+
+        assert dependencies == [("dbo", "vwSummary", "dbo", "vwBase")]
+
+    def test_get_view_dependencies_with_filter(self, mock_db_connection):
+        """Test getting view-to-view dependencies with schema filter."""
+        mock_db_connection.fetch_all.return_value = []
+
+        reader = SchemaReader(mock_db_connection)
+        reader.get_view_dependencies(schema_filter=["dbo"])
+
+        call_args = mock_db_connection.fetch_all.call_args
+        assert "IN (?)" in call_args[0][0]
+        assert call_args[0][1] == ("dbo",)
+
     def test_get_stored_procedures_no_filter(self, mock_db_connection):
         """Test getting all stored procedures."""
         mock_proc1 = MagicMock()

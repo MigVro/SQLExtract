@@ -1,6 +1,6 @@
 """Dependency analysis and ordering module."""
 
-from typing import List, Dict, Set, Tuple
+from typing import List, Dict, Set, Tuple, Any
 from collections import defaultdict, deque
 from .constraints import ForeignKeyInfo
 from .utils import get_logger
@@ -193,3 +193,41 @@ def order_tables_by_dependency(tables: List[Tuple[str, str]], foreign_keys: List
             deferred_fks.append(fk)
 
     return ordered_tables, deferred_fks
+
+
+def order_views_by_dependency(
+    views: List[Dict[str, Any]],
+    dependencies: List[Tuple[str, str, str, str]]
+) -> List[Dict[str, Any]]:
+    """Order views so that a view referenced by another view is created first.
+
+    Args:
+        views: List of view dicts with 'schema_name' and 'view_name' keys
+        dependencies: List of (schema_name, view_name, referenced_schema_name, referenced_view_name) tuples
+
+    Returns:
+        Views ordered so dependencies come before the views that reference them
+    """
+    view_map = {f"{v['schema_name']}.{v['view_name']}": v for v in views}
+
+    graph = DependencyGraph()
+    for view_key in view_map:
+        schema_name, view_name = view_key.split('.', 1)
+        graph.add_table(schema_name, view_name)
+
+    for schema_name, view_name, ref_schema_name, ref_view_name in dependencies:
+        ref_key = f"{ref_schema_name}.{ref_view_name}"
+        if ref_key not in view_map:
+            # Referenced view was filtered out (e.g. by --schemas) or unresolved; skip
+            continue
+        graph.add_dependency(schema_name, view_name, ref_schema_name, ref_view_name)
+
+    cycles = graph.detect_circular_dependencies()
+    if cycles:
+        logger.warning("Circular view dependencies detected; falling back to original order")
+        for cycle in cycles:
+            logger.warning(f"  Cycle: {' -> '.join(cycle)}")
+        return views
+
+    sorted_view_keys, _ = graph.topological_sort()
+    return [view_map[key] for key in sorted_view_keys if key in view_map]
