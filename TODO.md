@@ -127,16 +127,22 @@
 - [x] Extract procedure definitions (`src/schema.py: get_stored_procedures`)
   - [x] Use `sys.sql_modules` definition
   - [x] Handle encrypted procedures (warn and skip)
-  - [ ] Preserve parameters (definition captured as-is; parameters not parsed separately)
+  - [x] Preserve parameters (definition captured as-is; parameters *additionally* parsed
+        separately via `sys.parameters`, `src/schema.py: SchemaReader._get_parameters`,
+        for display purposes — see 2026-09-19 update)
 - [x] Generate `CREATE PROCEDURE` statements
-- [ ] Handle procedure dependencies (if needed)
+- [x] Handle procedure dependencies — not needed: SQL Server uses deferred name
+      resolution for procedures, so `CREATE PROCEDURE A` succeeds even if it calls a
+      procedure `B` that doesn't exist yet (unlike tables/FKs, which SQL Server
+      validates at creation time). No creation-order dependency exists to handle.
 
 ### Function Extraction ✅
 - [x] Extract function definitions (`src/schema.py: get_functions`)
   - [x] Scalar functions
   - [x] Inline table-valued functions
   - [x] Multi-statement table-valued functions
-  - [ ] CLR functions (metadata only)
+  - [x] CLR functions (metadata only) (`src/schema.py: SchemaReader._get_clr_functions`,
+        see 2026-09-19 update)
 - [x] Generate `CREATE FUNCTION` statements
 
 ### Trigger Extraction ✅
@@ -471,6 +477,41 @@ Before releasing v1.0:
 
 ## Recent Updates
 
+### 2026-09-19: Phase 4 Remaining Gaps Closed (parameters, dependencies, CLR functions)
+- **Added**: `SchemaReader._get_parameters()` in `src/schema.py`, querying `sys.parameters`
+  for each procedure's input/output parameters (name, type incl. length/precision/scale,
+  output flag, default value). `get_stored_procedures()` now attaches these under a new
+  `parameters` key, one extra query per procedure (same N+1-per-object pattern already
+  used for table columns). The captured `definition` (the full `CREATE PROCEDURE`
+  statement) is unchanged and still round-trips as-is — this is purely additional,
+  display-only metadata.
+- **Added**: `SQLFormatter._format_parameter_signature()` and a `procedure_signature()`
+  helper in `write_readme()` (`src/formatter.py`), so the README's Stored Procedures list
+  now shows each procedure's signature, e.g. `dbo.sp_GetUser(@UserId int, @Name
+  nvarchar(50) = NULL OUTPUT)`, instead of just the bare name.
+- **Added**: `SchemaReader._get_clr_functions()` in `src/schema.py`, querying
+  `sys.objects`/`sys.assembly_modules`/`sys.assemblies` for CLR scalar/table-valued
+  functions (`FS`/`FT`), which the previous `get_functions()` query didn't select at all
+  (only `FN`/`IF`/`TF`). `get_functions()` is now a thin wrapper combining
+  `_get_sql_functions()` (the renamed original query, tagged `kind: 'sql'`) and
+  `_get_clr_functions()` (tagged `kind: 'clr'`), mirroring the existing
+  `get_user_defined_types()` alias/table/clr pattern. `SQLFormatter.format_function()`
+  emits a metadata-only comment for `kind: 'clr'` (assembly/class/method name, same
+  rationale as CLR types — not enough to redeploy the assembly itself), and README's
+  Functions list tags CLR entries with `(CLR)`.
+- **Decided, not implemented**: procedure dependency ordering. SQL Server uses deferred
+  name resolution for procedures — `CREATE PROCEDURE A` succeeds even if it calls
+  procedure `B` that doesn't exist yet, unlike tables/FKs which are validated at creation
+  time. There is no creation-order dependency to resolve, so this checklist item is closed
+  as not needed rather than built.
+- **Tests**: 3 new in `tests/test_schema.py` (`test_get_stored_procedures_with_parameters`,
+  `test_get_functions_clr`, plus the CLR fixture split), 2 new in `tests/test_formatter.py`
+  (`test_format_function_clr`, `test_format_function_sql`), 1 new
+  (`test_write_readme_procedure_signature`); updated the pre-existing
+  `test_get_stored_procedures_*`/`test_get_functions_*` tests for the new per-procedure
+  parameter query and the two-query (SQL + CLR) shape of `get_functions()`. Full suite:
+  147 passed, 14 skipped (need real DB).
+
 ### 2026-09-19: Phase 8 Reopened and Completed
 - A local SQL Server 2017 instance (Windows Auth) became available in
   this environment, so the items deferred in "Phase 8 Closed" below for lack of real-DB
@@ -795,9 +836,11 @@ Before releasing v1.0:
 
 **Last Updated**: 2026-09-19
 **Status**: Phases 1, 2, 3, 5, 6, 7, 8 Complete; Phase 4 Mostly Complete
-**Current Phase**: Remaining gaps: procedure parameter parsing, procedure dependency
-ordering, CLR function metadata, database-level DDL triggers + explicit trigger order
-(Phase 4, deliberately deferred — see 2026-09-19 update). Phase 6 and Phase 4's integration
+**Current Phase**: Phase 4's remaining gaps are closed — procedure parameter parsing
+(README signatures), procedure dependency ordering (closed as not needed — deferred name
+resolution), and CLR function metadata are all done (see 2026-09-19 "Phase 4 Remaining
+Gaps Closed" update). Only database-level DDL triggers and explicit trigger order remain
+deliberately out of scope for Phase 4. Phase 6 and Phase 4's integration
 tests are now done against a real DB (see 2026-09-19 update); Phase 7's parallel-extraction
 speedup is still unbenchmarked (needs a real DB with meaningful network/query latency).
 Phase 8 (error handling/polish) is complete: exit codes, permission/database-access error

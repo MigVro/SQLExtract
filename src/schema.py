@@ -614,6 +614,48 @@ class SchemaReader:
             for row in results
         ]
 
+    def _get_parameters(self, object_id: int) -> List[Dict[str, Any]]:
+        """Get input/output parameters for a procedure, in ordinal order.
+
+        Excludes parameter_id 0 (the return value slot used by scalar functions;
+        procedures don't have one).
+        """
+        query = """
+        SELECT
+            p.name AS parameter_name,
+            TYPE_NAME(p.user_type_id) AS data_type,
+            p.max_length,
+            p.precision,
+            p.scale,
+            p.is_output,
+            p.has_default_value,
+            p.default_value
+        FROM sys.parameters p
+        WHERE p.object_id = ? AND p.parameter_id > 0
+        ORDER BY p.parameter_id
+        """
+
+        results = self.connection.fetch_all(query, (object_id,))
+
+        parameters = []
+        for row in results:
+            max_length = row.max_length
+            if row.data_type in ('nvarchar', 'nchar'):
+                max_length = max_length // 2 if max_length > 0 else max_length
+
+            parameters.append({
+                'name': row.parameter_name,
+                'data_type': row.data_type,
+                'max_length': max_length,
+                'precision': row.precision if row.precision > 0 else None,
+                'scale': row.scale if row.scale > 0 else None,
+                'is_output': bool(row.is_output),
+                'has_default_value': bool(row.has_default_value),
+                'default_value': row.default_value
+            })
+
+        return parameters
+
     def get_stored_procedures(self, schema_filter: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """Get all stored procedures from database.
 
@@ -621,10 +663,15 @@ class SchemaReader:
             schema_filter: Optional list of schema names to include
 
         Returns:
-            List of stored procedure information
+            List of stored procedure information. Each entry's 'definition' captures
+            the full CREATE PROCEDURE statement as-is (including its parameter list,
+            so redeploy is unaffected); 'parameters' additionally holds each parameter
+            parsed separately (name, type, output/default flags) for display purposes,
+            e.g. the signature list in the generated README.
         """
         query = """
         SELECT
+            p.object_id AS object_id,
             s.name AS schema_name,
             p.name AS procedure_name,
             m.definition AS definition
@@ -650,21 +697,32 @@ class SchemaReader:
             procedures.append({
                 'schema_name': row.schema_name,
                 'procedure_name': row.procedure_name,
-                'definition': row.definition.replace('\r\n', '\n')
+                'definition': row.definition.replace('\r\n', '\n'),
+                'parameters': self._get_parameters(row.object_id)
             })
 
         logger.info(f"Found {len(procedures)} stored procedures")
         return procedures
 
     def get_functions(self, schema_filter: Optional[List[str]] = None) -> List[Dict[str, Any]]:
-        """Get all functions from database.
+        """Get all functions from database: SQL functions (scalar, inline/multi-statement
+        table-valued) and CLR functions (metadata only - see _get_clr_functions).
 
         Args:
             schema_filter: Optional list of schema names to include
 
         Returns:
-            List of function information
+            List of function information dictionaries, each tagged with 'kind' ('sql' or 'clr').
         """
+        functions: List[Dict[str, Any]] = []
+        functions.extend(self._get_sql_functions(schema_filter))
+        functions.extend(self._get_clr_functions(schema_filter))
+
+        logger.info(f"Found {len(functions)} functions")
+        return functions
+
+    def _get_sql_functions(self, schema_filter: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """Get T-SQL functions (scalar, inline table-valued, multi-statement table-valued)."""
         query = """
         SELECT
             s.name AS schema_name,
@@ -691,11 +749,50 @@ class SchemaReader:
                 continue
 
             functions.append({
+                'kind': 'sql',
                 'schema_name': row.schema_name,
                 'function_name': row.function_name,
                 'function_type': row.function_type,
                 'definition': row.definition.replace('\r\n', '\n')
             })
 
-        logger.info(f"Found {len(functions)} functions")
         return functions
+
+    def _get_clr_functions(self, schema_filter: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """Get CLR (assembly-based) functions. Metadata only - not enough to regenerate
+        the assembly itself, so no CREATE FUNCTION statement is produced for these.
+        """
+        query = """
+        SELECT
+            s.name AS schema_name,
+            o.name AS function_name,
+            o.type_desc AS function_type,
+            a.name AS assembly_name,
+            am.assembly_class AS class_name,
+            am.assembly_method AS method_name
+        FROM sys.objects o
+        INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
+        INNER JOIN sys.assembly_modules am ON o.object_id = am.object_id
+        INNER JOIN sys.assemblies a ON am.assembly_id = a.assembly_id
+        WHERE o.type IN ('FS', 'FT') AND o.is_ms_shipped = 0
+        """
+
+        if schema_filter:
+            placeholders = ','.join(['?' for _ in schema_filter])
+            query += f" AND s.name IN ({placeholders})"
+            results = self.connection.fetch_all(query, tuple(schema_filter))
+        else:
+            results = self.connection.fetch_all(query)
+
+        return [
+            {
+                'kind': 'clr',
+                'schema_name': row.schema_name,
+                'function_name': row.function_name,
+                'function_type': row.function_type,
+                'assembly_name': row.assembly_name,
+                'class_name': row.class_name,
+                'method_name': row.method_name
+            }
+            for row in results
+        ]

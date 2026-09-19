@@ -510,16 +510,20 @@ class TestSchemaReader:
     def test_get_stored_procedures_no_filter(self, mock_db_connection):
         """Test getting all stored procedures."""
         mock_proc1 = MagicMock()
+        mock_proc1.object_id = 101
         mock_proc1.schema_name = "MQTT"
         mock_proc1.procedure_name = "sp_GetReceiversByBroker"
         mock_proc1.definition = "CREATE PROCEDURE MQTT.sp_GetReceiversByBroker ..."
 
         mock_proc2 = MagicMock()
+        mock_proc2.object_id = 102
         mock_proc2.schema_name = "dbo"
         mock_proc2.procedure_name = "sp_Cleanup"
         mock_proc2.definition = "CREATE PROCEDURE dbo.sp_Cleanup ..."
 
-        mock_db_connection.fetch_all.return_value = [mock_proc1, mock_proc2]
+        # First call returns the procedures; subsequent calls are the per-procedure
+        # parameter lookups (none of them take parameters here).
+        mock_db_connection.fetch_all.side_effect = [[mock_proc1, mock_proc2], [], []]
 
         reader = SchemaReader(mock_db_connection)
         procedures = reader.get_stored_procedures()
@@ -527,21 +531,24 @@ class TestSchemaReader:
         assert len(procedures) == 2
         assert procedures[0]['schema_name'] == "MQTT"
         assert procedures[0]['procedure_name'] == "sp_GetReceiversByBroker"
+        assert procedures[0]['parameters'] == []
         assert procedures[1]['schema_name'] == "dbo"
 
     def test_get_stored_procedures_skip_encrypted(self, mock_db_connection):
         """Test that encrypted stored procedures are skipped."""
         mock_proc_normal = MagicMock()
+        mock_proc_normal.object_id = 201
         mock_proc_normal.schema_name = "dbo"
         mock_proc_normal.procedure_name = "sp_Normal"
         mock_proc_normal.definition = "CREATE PROCEDURE ..."
 
         mock_proc_encrypted = MagicMock()
+        mock_proc_encrypted.object_id = 202
         mock_proc_encrypted.schema_name = "dbo"
         mock_proc_encrypted.procedure_name = "sp_Encrypted"
         mock_proc_encrypted.definition = None  # Encrypted
 
-        mock_db_connection.fetch_all.return_value = [mock_proc_normal, mock_proc_encrypted]
+        mock_db_connection.fetch_all.side_effect = [[mock_proc_normal, mock_proc_encrypted], []]
 
         reader = SchemaReader(mock_db_connection)
         procedures = reader.get_stored_procedures()
@@ -550,8 +557,57 @@ class TestSchemaReader:
         assert len(procedures) == 1
         assert procedures[0]['procedure_name'] == "sp_Normal"
 
+    def test_get_stored_procedures_with_parameters(self, mock_db_connection):
+        """Test that a procedure's parameters are parsed separately from its definition."""
+        mock_proc = MagicMock()
+        mock_proc.object_id = 301
+        mock_proc.schema_name = "dbo"
+        mock_proc.procedure_name = "sp_GetUser"
+        mock_proc.definition = "CREATE PROCEDURE dbo.sp_GetUser @UserId int, @Name nvarchar(50) = NULL OUTPUT AS ..."
+
+        mock_param1 = MagicMock()
+        mock_param1.parameter_name = "@UserId"
+        mock_param1.data_type = "int"
+        mock_param1.max_length = 4
+        mock_param1.precision = 10
+        mock_param1.scale = 0
+        mock_param1.is_output = False
+        mock_param1.has_default_value = False
+        mock_param1.default_value = None
+
+        mock_param2 = MagicMock()
+        mock_param2.parameter_name = "@Name"
+        mock_param2.data_type = "nvarchar"
+        mock_param2.max_length = 100  # bytes; should be halved to 50 chars
+        mock_param2.precision = 0
+        mock_param2.scale = 0
+        mock_param2.is_output = True
+        mock_param2.has_default_value = True
+        mock_param2.default_value = "NULL"
+
+        mock_db_connection.fetch_all.side_effect = [[mock_proc], [mock_param1, mock_param2]]
+
+        reader = SchemaReader(mock_db_connection)
+        procedures = reader.get_stored_procedures()
+
+        assert len(procedures) == 1
+        params = procedures[0]['parameters']
+        assert params[0] == {
+            'name': '@UserId', 'data_type': 'int', 'max_length': 4,
+            'precision': 10, 'scale': None, 'is_output': False,
+            'has_default_value': False, 'default_value': None
+        }
+        assert params[1] == {
+            'name': '@Name', 'data_type': 'nvarchar', 'max_length': 50,
+            'precision': None, 'scale': None, 'is_output': True,
+            'has_default_value': True, 'default_value': 'NULL'
+        }
+
+        param_query_call = mock_db_connection.fetch_all.call_args_list[1]
+        assert param_query_call[0][1] == (301,)
+
     def test_get_functions_all_types(self, mock_db_connection):
-        """Test getting all function types (scalar, inline table-valued, multi-statement table-valued)."""
+        """Test getting all SQL function types (scalar, inline table-valued, multi-statement table-valued)."""
         mock_fn_scalar = MagicMock()
         mock_fn_scalar.schema_name = "dbo"
         mock_fn_scalar.function_name = "fn_GetConfigValue"
@@ -570,7 +626,8 @@ class TestSchemaReader:
         mock_fn_mstvf.function_type = "SQL_TABLE_VALUED_FUNCTION"
         mock_fn_mstvf.definition = "CREATE FUNCTION dbo.fn_SplitString(...) RETURNS @Result TABLE ..."
 
-        mock_db_connection.fetch_all.return_value = [mock_fn_scalar, mock_fn_inline_tvf, mock_fn_mstvf]
+        # First call: SQL functions. Second call: CLR functions (none here).
+        mock_db_connection.fetch_all.side_effect = [[mock_fn_scalar, mock_fn_inline_tvf, mock_fn_mstvf], []]
 
         reader = SchemaReader(mock_db_connection)
         functions = reader.get_functions()
@@ -579,6 +636,7 @@ class TestSchemaReader:
 
         assert functions[0]['function_name'] == "fn_GetConfigValue"
         assert functions[0]['function_type'] == "SQL_SCALAR_FUNCTION"
+        assert functions[0]['kind'] == "sql"
 
         assert functions[1]['function_name'] == "fn_GetRecentEvents"
         assert functions[1]['function_type'] == "SQL_INLINE_TABLE_VALUED_FUNCTION"
@@ -594,7 +652,7 @@ class TestSchemaReader:
         mock_function.function_type = "SQL_SCALAR_FUNCTION"
         mock_function.definition = "CREATE FUNCTION ..."
 
-        mock_db_connection.fetch_all.return_value = [mock_function]
+        mock_db_connection.fetch_all.side_effect = [[mock_function], []]
 
         reader = SchemaReader(mock_db_connection)
         functions = reader.get_functions(schema_filter=["dbo"])
@@ -602,9 +660,35 @@ class TestSchemaReader:
         assert len(functions) == 1
         assert functions[0]['schema_name'] == "dbo"
 
-        call_args = mock_db_connection.fetch_all.call_args
-        assert "IN (?)" in call_args[0][0]
-        assert call_args[0][1] == ("dbo",)
+        first_call_args = mock_db_connection.fetch_all.call_args_list[0]
+        assert "IN (?)" in first_call_args[0][0]
+        assert first_call_args[0][1] == ("dbo",)
+
+    def test_get_functions_clr(self, mock_db_connection):
+        """Test getting a CLR (assembly-based) function - metadata only."""
+        mock_clr_fn = MagicMock()
+        mock_clr_fn.schema_name = "dbo"
+        mock_clr_fn.function_name = "fn_GeoDistance"
+        mock_clr_fn.function_type = "CLR_SCALAR_FUNCTION"
+        mock_clr_fn.assembly_name = "SpatialTypes"
+        mock_clr_fn.class_name = "SpatialTypes.GeoFunctions"
+        mock_clr_fn.method_name = "Distance"
+
+        # First call: SQL functions (none). Second call: CLR functions.
+        mock_db_connection.fetch_all.side_effect = [[], [mock_clr_fn]]
+
+        reader = SchemaReader(mock_db_connection)
+        functions = reader.get_functions()
+
+        assert functions == [{
+            'kind': 'clr',
+            'schema_name': 'dbo',
+            'function_name': 'fn_GeoDistance',
+            'function_type': 'CLR_SCALAR_FUNCTION',
+            'assembly_name': 'SpatialTypes',
+            'class_name': 'SpatialTypes.GeoFunctions',
+            'method_name': 'Distance'
+        }]
 
     def test_get_triggers_groups_events(self, mock_db_connection):
         """Test that a trigger firing on multiple events is returned once with all events."""

@@ -152,6 +152,37 @@ class TestSQLFormatter:
         assert "CREATE TYPE [dbo].[GeoPoint]" not in sql
         assert "SpatialTypes" in sql
 
+    def test_format_function_clr(self):
+        """Test that a CLR function is emitted as a metadata comment, not a CREATE FUNCTION statement."""
+        formatter = SQLFormatter("/tmp/test")
+
+        func = {
+            'kind': 'clr', 'schema_name': 'dbo', 'function_name': 'fn_GeoDistance',
+            'function_type': 'CLR_SCALAR_FUNCTION', 'assembly_name': 'SpatialTypes',
+            'class_name': 'SpatialTypes.GeoFunctions', 'method_name': 'Distance'
+        }
+
+        sql = formatter.format_function(func)
+
+        assert sql.startswith("--")
+        assert "CREATE FUNCTION dbo.fn_GeoDistance" not in sql
+        assert "SpatialTypes" in sql
+        assert "Distance" in sql
+
+    def test_format_function_sql(self):
+        """Test that a SQL function's definition is passed through as-is."""
+        formatter = SQLFormatter("/tmp/test")
+
+        func = {
+            'kind': 'sql', 'schema_name': 'dbo', 'function_name': 'fn_Test',
+            'function_type': 'SQL_SCALAR_FUNCTION', 'definition': 'CREATE FUNCTION dbo.fn_Test() RETURNS int AS ...'
+        }
+
+        sql = formatter.format_function(func)
+
+        assert sql.startswith("CREATE FUNCTION dbo.fn_Test()")
+        assert sql.endswith("\nGO\n")
+
     def test_format_table(self):
         """Test formatting table CREATE statement."""
         formatter = SQLFormatter("/tmp/test")
@@ -437,6 +468,49 @@ class TestSQLFormatter:
             assert "deploy.sh" in content
             assert "deploy.ps1" in content
             assert "Seed data is included" in content
+
+    def test_write_readme_procedure_signature(self):
+        """Test that README lists a procedure's parsed parameters as a signature, and tags CLR functions."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            formatter = SQLFormatter(tmpdir)
+
+            proc = {
+                'schema_name': 'dbo', 'procedure_name': 'sp_GetUser',
+                'definition': '...',
+                'parameters': [
+                    {
+                        'name': '@UserId', 'data_type': 'int', 'max_length': None,
+                        'precision': None, 'scale': None, 'is_output': False,
+                        'has_default_value': False, 'default_value': None
+                    },
+                    {
+                        'name': '@Name', 'data_type': 'nvarchar', 'max_length': 50,
+                        'precision': None, 'scale': None, 'is_output': True,
+                        'has_default_value': True, 'default_value': 'NULL'
+                    }
+                ]
+            }
+            proc_no_params = {
+                'schema_name': 'dbo', 'procedure_name': 'sp_Cleanup',
+                'definition': '...', 'parameters': []
+            }
+            clr_func = {
+                'kind': 'clr', 'schema_name': 'dbo', 'function_name': 'fn_GeoDistance',
+                'function_type': 'CLR_SCALAR_FUNCTION', 'assembly_name': 'SpatialTypes',
+                'class_name': 'SpatialTypes.GeoFunctions', 'method_name': 'Distance'
+            }
+
+            formatter.write_readme(
+                output_format='modular',
+                schemas=[], user_defined_types=[], sequences=[], tables=[], views=[],
+                procedures=[proc, proc_no_params], functions=[clr_func],
+                triggers=[], indexes=[], deferred_foreign_keys=[], has_seed_data=False
+            )
+
+            content = Path(tmpdir, 'README.md').read_text(encoding='utf-8')
+            assert "dbo.sp_GetUser(@UserId int, @Name nvarchar(50) = NULL OUTPUT)" in content
+            assert "dbo.sp_Cleanup()" in content
+            assert "dbo.fn_GeoDistance (CLR)" in content
 
     def test_write_header(self):
         """Test SQL script header generation."""

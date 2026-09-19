@@ -254,6 +254,16 @@ GO
         else:
             return data_type
 
+    def _format_parameter_signature(self, param: Dict[str, Any]) -> str:
+        """Format a single procedure parameter for the README signature list."""
+        type_str = self._format_data_type(param['data_type'], param['max_length'], param['precision'], param['scale'])
+        parts = [f"{param['name']} {type_str}"]
+        if param['has_default_value']:
+            parts.append(f"= {param['default_value']}")
+        if param['is_output']:
+            parts.append("OUTPUT")
+        return " ".join(parts)
+
     def format_primary_key(self, pk: PrimaryKeyInfo) -> str:
         """Generate ALTER TABLE ADD PRIMARY KEY statement.
 
@@ -385,6 +395,15 @@ ON {escape_sql_identifier(idx.schema_name)}.{escape_sql_identifier(idx.table_nam
         # Definition already includes CREATE PROCEDURE
         return definition + "\nGO\n"
 
+    def _format_clr_function_comment(self, func: Dict[str, Any]) -> str:
+        """Generate a metadata comment for a CLR function (not enough info to recreate the assembly)."""
+        return (
+            f"-- CLR function {func['schema_name']}.{func['function_name']} "
+            f"(assembly '{func['assembly_name']}', class '{func['class_name']}', "
+            f"method '{func['method_name']}') - metadata only; "
+            "deploy the assembly and run CREATE FUNCTION ... EXTERNAL NAME manually.\n"
+        )
+
     def format_function(self, func: Dict[str, Any]) -> str:
         """Generate CREATE FUNCTION statement.
 
@@ -392,8 +411,11 @@ ON {escape_sql_identifier(idx.schema_name)}.{escape_sql_identifier(idx.table_nam
             func: Function information dictionary
 
         Returns:
-            SQL statement
+            SQL statement, or a metadata-only comment for a CLR function (kind == 'clr')
         """
+        if func.get('kind') == 'clr':
+            return self._format_clr_function_comment(func)
+
         definition = func['definition']
 
         # Definition already includes CREATE FUNCTION
@@ -1030,12 +1052,21 @@ GO
                 lines.append(f"- {name_fn(item)}")
             lines.append("")
 
+        def procedure_signature(proc: Dict[str, Any]) -> str:
+            params = proc.get('parameters') or []
+            param_str = ", ".join(self._format_parameter_signature(p) for p in params)
+            return f"{proc['schema_name']}.{proc['procedure_name']}({param_str})"
+
+        def function_name(fn: Dict[str, Any]) -> str:
+            suffix = " (CLR)" if fn.get('kind') == 'clr' else ""
+            return f"{fn['schema_name']}.{fn['function_name']}{suffix}"
+
         list_section("User-Defined Types", user_defined_types, lambda u: f"{u['schema_name']}.{u['type_name']} ({u['kind']})")
         list_section("Sequences", sequences, lambda s: f"{s['schema_name']}.{s['sequence_name']}")
         list_section("Tables", tables, lambda t: f"{t.schema_name}.{t.table_name}")
         list_section("Views", views, lambda v: f"{v['schema_name']}.{v['view_name']}")
-        list_section("Stored Procedures", procedures, lambda p: f"{p['schema_name']}.{p['procedure_name']}")
-        list_section("Functions", functions, lambda fn: f"{fn['schema_name']}.{fn['function_name']}")
+        list_section("Stored Procedures", procedures, procedure_signature)
+        list_section("Functions", functions, function_name)
         list_section("Triggers", triggers, lambda t: f"{t['schema_name']}.{t['table_name']}.{t['trigger_name']}")
 
         lines.append("## Dependencies")
