@@ -108,7 +108,12 @@ class DatabaseExtractor:
             extract_seed_data: Whether to extract seed data
             seed_tables: Optional list of tables for seed data (format: schema.table)
             max_rows: Maximum rows per table for seed data
-            output_format: Output format - 'single', 'per-object', or 'modular'
+            output_format: Output format - 'single', 'per-object', 'per-object-cons', or
+                'modular'. 'per-object-cons' is 'per-object' but bundles each table's
+                primary key, unique/check constraints, indexes, and triggers into its
+                Tables/ file instead of separate Constraints/Indexes/Triggers files.
+                Foreign keys are always kept separate to avoid order-dependent per-table
+                deploys
             clean: Delete the output directory before extraction
             omit_ts: Omit the generation timestamp from output headers
             no_header: Omit the header comment block from output files entirely
@@ -309,7 +314,7 @@ class DatabaseExtractor:
                         triggers=triggers,
                         seed_data=seed_data
                     )
-                elif output_format == 'per-object':
+                elif output_format in ('per-object', 'per-object-cons'):
                     formatter.write_per_object_format(
                         schemas=schemas,
                         user_defined_types=user_defined_types,
@@ -326,7 +331,8 @@ class DatabaseExtractor:
                         procedures=procedures,
                         functions=functions,
                         triggers=triggers,
-                        seed_data_by_table=seed_data_by_table
+                        seed_data_by_table=seed_data_by_table,
+                        group_by_table=(output_format == 'per-object-cons')
                     )
                 else:
                     formatter.write_modular_format(
@@ -350,6 +356,7 @@ class DatabaseExtractor:
 
                 formatter.write_readme(
                     output_format=output_format,
+                    group_by_table=(output_format == 'per-object-cons'),
                     schemas=schemas,
                     user_defined_types=user_defined_types,
                     sequences=sequences,

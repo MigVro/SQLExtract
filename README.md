@@ -177,6 +177,12 @@ Deploy with:
 (`Tables/`, `Views/`, `Procedures/`, `Constraints/01_PrimaryKeys/`, etc. — see the generated
 `README.md` for the full list and deployment order).
 
+**Per-object, consolidated** (`--format per-object-cons`) — same as per-object, but each table's
+primary key, unique/check constraints, indexes, and triggers are bundled into its `Tables/` file
+instead of separate `Constraints/`/`Indexes/`/`Triggers/` files (like SSMS's "Script Table as
+CREATE To"). Foreign keys still get their own file under `Constraints/03_ForeignKeys/`, since
+bundling them would make per-table deploys order-dependent (or circular) across tables.
+
 **Modular** (`--format modular`, default) — numbered deployment files plus `deploy.sh`/`deploy.ps1`, as shown above.
 
 ### 4. Dry Run
@@ -307,7 +313,8 @@ SQLExtract/
 ### Output Options
 ```
 --output, -o          Output directory (default: ./output)
---format              Output format: single, per-object, modular (default: modular)
+--format              Output format: single, per-object, per-object-cons, modular
+                      (default: modular)
 --clean               Delete the output directory before extraction
 --omit-ts             Omit the generation timestamp from output headers (avoids
                       spurious diffs when re-extracting an unchanged schema)

@@ -458,6 +458,7 @@ class TestSQLFormatter:
 
             formatter.write_readme(
                 output_format='modular',
+                group_by_table=False,
                 schemas=[], user_defined_types=[], sequences=[], tables=[table], views=[view], procedures=[], functions=[],
                 triggers=[], indexes=[], deferred_foreign_keys=[], has_seed_data=True
             )
@@ -502,6 +503,7 @@ class TestSQLFormatter:
 
             formatter.write_readme(
                 output_format='modular',
+                group_by_table=False,
                 schemas=[], user_defined_types=[], sequences=[], tables=[], views=[],
                 procedures=[proc, proc_no_params], functions=[clr_func],
                 triggers=[], indexes=[], deferred_foreign_keys=[], has_seed_data=False

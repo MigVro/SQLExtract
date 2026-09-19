@@ -1,6 +1,7 @@
 """SQL script formatter and generator."""
 
 import os
+from collections import defaultdict
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
 from .schema import SchemaInfo, TableInfo, ColumnInfo
@@ -622,7 +623,8 @@ GO
         procedures: List[Dict[str, Any]],
         functions: List[Dict[str, Any]],
         triggers: List[Dict[str, Any]],
-        seed_data_by_table: Dict[str, List[str]]
+        seed_data_by_table: Dict[str, List[str]],
+        group_by_table: bool = False
     ) -> None:
         """Write each object to its own file, organized in subdirectories by type.
 
@@ -643,6 +645,11 @@ GO
             functions: List of functions
             triggers: List of triggers
             seed_data_by_table: Seed data INSERT statements keyed by "schema.table"
+            group_by_table: Bundle each table's primary key, unique/check constraints,
+                indexes, and triggers into its Tables/ file instead of writing them to
+                separate Constraints/Indexes/Triggers files. Foreign keys are always kept
+                separate (in Constraints/03_ForeignKeys) since bundling them would make
+                per-table deploys order-dependent or circular across tables.
         """
         header = self.write_header()
 
@@ -662,31 +669,64 @@ GO
         for seq in sequences:
             write_object('Sequences', f"{seq['schema_name']}.{seq['sequence_name']}", self.format_sequence(seq))
 
+        pks_by_table: Dict[Tuple[str, str], List[PrimaryKeyInfo]] = defaultdict(list)
+        uqs_by_table: Dict[Tuple[str, str], List[UniqueConstraintInfo]] = defaultdict(list)
+        checks_by_table: Dict[Tuple[str, str], List[CheckConstraintInfo]] = defaultdict(list)
+        indexes_by_table: Dict[Tuple[str, str], List[IndexInfo]] = defaultdict(list)
+        triggers_by_table: Dict[Tuple[str, str], List[Dict[str, Any]]] = defaultdict(list)
+        if group_by_table:
+            for pk in primary_keys:
+                pks_by_table[(pk.schema_name, pk.table_name)].append(pk)
+            for uq in unique_constraints:
+                uqs_by_table[(uq.schema_name, uq.table_name)].append(uq)
+            for check in check_constraints:
+                checks_by_table[(check.schema_name, check.table_name)].append(check)
+            for idx in indexes:
+                indexes_by_table[(idx.schema_name, idx.table_name)].append(idx)
+            for trigger in triggers:
+                triggers_by_table[(trigger['schema_name'], trigger['table_name'])].append(trigger)
+
         for table in tables:
             table_sql = self.format_table(table)
             props = extended_properties.get((table.schema_name, table.table_name))
             if props:
                 table_sql += "\n" + self.format_extended_properties(table.schema_name, table.table_name, props)
+
+            if group_by_table:
+                key = (table.schema_name, table.table_name)
+                for pk in pks_by_table[key]:
+                    table_sql += "\n" + self.format_primary_key(pk)
+                for uq in uqs_by_table[key]:
+                    table_sql += "\n" + self.format_unique_constraint(uq)
+                for check in checks_by_table[key]:
+                    table_sql += "\n" + self.format_check_constraint(check)
+                for idx in indexes_by_table[key]:
+                    table_sql += "\n" + self.format_index(idx)
+                for trigger in triggers_by_table[key]:
+                    table_sql += "\n" + self.format_trigger(trigger)
+
             write_object('Tables', f"{table.schema_name}.{table.table_name}", table_sql)
 
         # Split by constraint type into separately-numbered subfolders, so a plain
         # alphabetical deploy of Constraints/ doesn't run a foreign key before the
         # primary/unique key it references.
-        for pk in primary_keys:
-            write_object('Constraints/01_PrimaryKeys', pk.constraint_name, self.format_primary_key(pk))
+        if not group_by_table:
+            for pk in primary_keys:
+                write_object('Constraints/01_PrimaryKeys', pk.constraint_name, self.format_primary_key(pk))
 
-        for uq in unique_constraints:
-            write_object('Constraints/02_UniqueConstraints', uq.constraint_name, self.format_unique_constraint(uq))
+            for uq in unique_constraints:
+                write_object('Constraints/02_UniqueConstraints', uq.constraint_name, self.format_unique_constraint(uq))
 
         regular_fks = [fk for fk in foreign_keys if fk not in deferred_foreign_keys]
         for fk in regular_fks:
             write_object('Constraints/03_ForeignKeys', fk.constraint_name, self.format_foreign_key(fk))
 
-        for check in check_constraints:
-            write_object('Constraints/04_CheckConstraints', check.constraint_name, self.format_check_constraint(check))
+        if not group_by_table:
+            for check in check_constraints:
+                write_object('Constraints/04_CheckConstraints', check.constraint_name, self.format_check_constraint(check))
 
-        for idx in indexes:
-            write_object('Indexes', idx.index_name, self.format_index(idx))
+            for idx in indexes:
+                write_object('Indexes', idx.index_name, self.format_index(idx))
 
         for view in views:
             write_object('Views', f"{view['schema_name']}.{view['view_name']}", self.format_view(view))
@@ -697,8 +737,9 @@ GO
         for func in functions:
             write_object('Functions', f"{func['schema_name']}.{func['function_name']}", self.format_function(func))
 
-        for trigger in triggers:
-            write_object('Triggers', f"{trigger['schema_name']}.{trigger['table_name']}.{trigger['trigger_name']}", self.format_trigger(trigger))
+        if not group_by_table:
+            for trigger in triggers:
+                write_object('Triggers', f"{trigger['schema_name']}.{trigger['table_name']}.{trigger['trigger_name']}", self.format_trigger(trigger))
 
         for fk in deferred_foreign_keys:
             write_object('Constraints/03_ForeignKeys', f"{fk.constraint_name}_DEFERRED", self.format_foreign_key(fk))
@@ -996,6 +1037,7 @@ GO
     def write_readme(
         self,
         output_format: str,
+        group_by_table: bool,
         schemas: List[SchemaInfo],
         user_defined_types: List[Dict[str, Any]],
         sequences: List[Dict[str, Any]],
@@ -1012,6 +1054,8 @@ GO
 
         Args:
             output_format: 'single', 'per-object', or 'modular'
+            group_by_table: Whether 'per-object' bundled constraints/indexes/triggers into
+                each table's file (see write_per_object_format)
             schemas: List of schemas
             user_defined_types: List of user-defined types (alias, table, CLR)
             sequences: List of sequences
@@ -1098,6 +1142,15 @@ GO
             lines.append(
                 "Run `schema.sql` against the target database (e.g. with `sqlcmd` or SQL Server Management Studio). "
                 "Objects are already ordered by dependency within the file."
+            )
+        elif group_by_table:
+            lines.append(
+                "Objects are organized into subdirectories by type, except each table's primary key, "
+                "unique/check constraints, indexes, and triggers are bundled into its file under `Tables/` "
+                "(like SSMS's \"Script Table as CREATE To\"). Foreign keys stay separate to avoid "
+                "order-dependent deploys across tables. Deploy in this order (there is no single combined "
+                "script for this format): `Schemas/`, `Types/`, `Sequences/`, `Tables/`, "
+                "`Constraints/03_ForeignKeys/`, `Views/`, `Procedures/`, `Functions/`, `SeedData/`."
             )
         else:
             lines.append(
