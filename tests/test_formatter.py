@@ -155,6 +155,66 @@ class TestSQLFormatter:
         assert "DISABLE TRIGGER [dbo].[Orders]" not in sql
         assert "DISABLE TRIGGER [trg_Orders_Audit] ON [dbo].[Orders]" in sql
 
+    def test_write_modular_format_generates_deploy_scripts(self):
+        """Test that deploy.sh/deploy.ps1 list only the files actually written, in order."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            formatter = SQLFormatter(tmpdir)
+
+            col = ColumnInfo(
+                name="ID", data_type="int", max_length=None, precision=None, scale=None,
+                is_nullable=False, is_identity=True, is_computed=False,
+                default_value=None, computed_definition=None
+            )
+            table = TableInfo(schema_name="dbo", table_name="Config", columns=[col])
+
+            formatter.write_modular_format(
+                schemas=[], tables=[table], primary_keys=[], foreign_keys=[],
+                deferred_foreign_keys=[], unique_constraints=[], check_constraints=[],
+                indexes=[], views=[], procedures=[], functions=[], triggers=[],
+                seed_data=[]
+            )
+
+            # Only tables were provided, so only 02_CREATE_TABLES.sql should exist
+            # and be the only entry in the deploy scripts.
+            assert os.path.exists(os.path.join(tmpdir, '02_CREATE_TABLES.sql'))
+            assert not os.path.exists(os.path.join(tmpdir, '01_CREATE_SCHEMAS.sql'))
+
+            sh_content = Path(tmpdir, 'deploy.sh').read_text(encoding='utf-8')
+            assert '02_CREATE_TABLES.sql' in sh_content
+            assert '01_CREATE_SCHEMAS.sql' not in sh_content
+            assert 'sqlcmd' in sh_content
+
+            ps1_content = Path(tmpdir, 'deploy.ps1').read_text(encoding='utf-8')
+            assert '02_CREATE_TABLES.sql' in ps1_content
+            assert '01_CREATE_SCHEMAS.sql' not in ps1_content
+            assert 'sqlcmd' in ps1_content
+
+    def test_write_readme_modular(self):
+        """Test README generation for modular format lists objects and deploy instructions."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            formatter = SQLFormatter(tmpdir)
+
+            col = ColumnInfo(
+                name="ID", data_type="int", max_length=None, precision=None, scale=None,
+                is_nullable=False, is_identity=True, is_computed=False,
+                default_value=None, computed_definition=None
+            )
+            table = TableInfo(schema_name="dbo", table_name="Config", columns=[col])
+            view = {"schema_name": "dbo", "view_name": "vwConfig", "definition": "..."}
+
+            formatter.write_readme(
+                output_format='modular',
+                schemas=[], tables=[table], views=[view], procedures=[], functions=[],
+                triggers=[], indexes=[], deferred_foreign_keys=[], has_seed_data=True
+            )
+
+            content = Path(tmpdir, 'README.md').read_text(encoding='utf-8')
+            assert "dbo.Config" in content
+            assert "dbo.vwConfig" in content
+            assert "deploy.sh" in content
+            assert "deploy.ps1" in content
+            assert "Seed data is included" in content
+
     def test_write_header(self):
         """Test SQL script header generation."""
         formatter = SQLFormatter("/tmp/test")

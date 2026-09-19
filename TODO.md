@@ -185,7 +185,7 @@
 
 ---
 
-## Phase 6: Output Formatting (Week 6) - MOSTLY COMPLETE
+## Phase 6: Output Formatting (Week 6) ✅ COMPLETE
 
 ### Single File Format ✅
 - [x] Implement single file output (`src/formatter.py`)
@@ -199,20 +199,22 @@
   - [x] Generate filenames from schema and object name
   - [x] Write each object to separate file
 
-### Modular Format
+### Modular Format ✅
 - [x] Implement modular file output
   - [x] Generate numbered files (01_, 02_, etc.)
   - [x] Group objects by type
-  - [ ] Create deployment script (deploy.sh, deploy.ps1)
+  - [x] Create deployment script (deploy.sh, deploy.ps1) — lists only the files actually
+        written, in order, and runs them via `sqlcmd`
 
-### Documentation Generation
-- [ ] Generate README.md for extracted schema
-  - [ ] List of objects
-  - [ ] Deployment instructions
-  - [ ] Dependencies
+### Documentation Generation ✅
+- [x] Generate README.md for extracted schema (all formats, not just modular)
+  - [x] List of objects
+  - [x] Deployment instructions (format-specific)
+  - [x] Dependencies
 
 ### Testing
-- [ ] Unit tests for each output format
+- [x] Unit tests for each output format (deploy scripts + README; `write_single_file`/
+      `write_per_object_format` themselves still untested beyond the smoke checks below)
 - [ ] Integration test: extract with each format, verify file structure
 - [ ] Integration test: deploy from each format
 
@@ -408,6 +410,22 @@ Before releasing v1.0:
 
 ## Recent Updates
 
+### 2026-09-19: Deployment Scripts and README Generation
+- **Added**: `SQLFormatter._write_deploy_scripts()`, called from `write_modular_format()`.
+  Generates `deploy.sh` and `deploy.ps1` listing only the numbered `.sql` files that were
+  actually written (empty sections are skipped, as before), in deployment order, run via
+  `sqlcmd`. `deploy.sh` is written with executable permissions.
+- **Added**: `SQLFormatter.write_readme()`, called once from `DatabaseExtractor.extract()`
+  after whichever format was written. Generates `README.md` with object counts, per-type
+  object lists, a short note on dependency ordering (tables/views/deferred FKs), and
+  format-specific deployment instructions. Applies to all three output formats, not just
+  modular.
+- **Tests**: 2 new unit tests in `tests/test_formatter.py`, plus manual end-to-end checks
+  of the generated `deploy.sh`/`deploy.ps1`/`README.md` content. Full suite: 92 passed,
+  4 skipped (need real DB).
+- **Still open**: no integration test extracts with each format and verifies the resulting
+  file structure or actually deploys it (needs a real DB — see Phase 6 Testing).
+
 ### 2026-09-19: Trigger Extraction (DML table triggers only)
 - **Added**: `SchemaReader.get_triggers()` in `src/schema.py`, querying `sys.triggers` +
   `sys.trigger_events` for AFTER/INSTEAD OF table triggers, their INSERT/UPDATE/DELETE
@@ -474,7 +492,8 @@ Before releasing v1.0:
 ---
 
 **Last Updated**: 2026-09-19
-**Status**: Phases 1, 2, 3, 5 Complete; Phases 4, 6 Mostly Complete
-**Current Phase**: Remaining gaps: database-level DDL triggers + explicit trigger order (Phase 4, deliberately deferred),
-deployment script + README generation (Phase 6)
+**Status**: Phases 1, 2, 3, 5, 6 Complete; Phase 4 Mostly Complete
+**Current Phase**: Remaining gaps: database-level DDL triggers + explicit trigger order
+(Phase 4, deliberately deferred — see 2026-09-19 update); Phase 6 integration/deploy tests
+still need a real DB. Phase 7 (sequences, UDTs, extended properties) not started.
 **Estimated Completion**: Not re-estimated — verify remaining Phase 7-9 scope before committing to a timeline

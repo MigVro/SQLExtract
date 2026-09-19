@@ -550,28 +550,34 @@ GO
             seed_data: List of seed data INSERT statements
         """
         header = self.write_header()
+        written_files: List[str] = []
 
         # 01: Schemas
         if schemas:
-            with open(os.path.join(self.output_dir, '01_CREATE_SCHEMAS.sql'), 'w', encoding='utf-8') as f:
+            filename = '01_CREATE_SCHEMAS.sql'
+            with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- SCHEMAS\n\n")
                 for schema in schemas:
                     f.write(self.format_schema(schema))
                     f.write("\n")
+            written_files.append(filename)
 
         # 02: Tables
         if tables:
-            with open(os.path.join(self.output_dir, '02_CREATE_TABLES.sql'), 'w', encoding='utf-8') as f:
+            filename = '02_CREATE_TABLES.sql'
+            with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- TABLES\n\n")
                 for table in tables:
                     f.write(self.format_table(table))
                     f.write("\n")
+            written_files.append(filename)
 
         # 03: Constraints (PK, FK, Unique, Check)
         if primary_keys or foreign_keys or unique_constraints or check_constraints:
-            with open(os.path.join(self.output_dir, '03_CREATE_CONSTRAINTS.sql'), 'w', encoding='utf-8') as f:
+            filename = '03_CREATE_CONSTRAINTS.sql'
+            with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
 
                 if primary_keys:
@@ -599,68 +605,272 @@ GO
                     for check in check_constraints:
                         f.write(self.format_check_constraint(check))
                         f.write("\n")
+            written_files.append(filename)
 
         # 04: Indexes
         if indexes:
-            with open(os.path.join(self.output_dir, '04_CREATE_INDEXES.sql'), 'w', encoding='utf-8') as f:
+            filename = '04_CREATE_INDEXES.sql'
+            with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- INDEXES\n\n")
                 for idx in indexes:
                     f.write(self.format_index(idx))
                     f.write("\n")
+            written_files.append(filename)
 
         # 05: Triggers
         if triggers:
-            with open(os.path.join(self.output_dir, '05_CREATE_TRIGGERS.sql'), 'w', encoding='utf-8') as f:
+            filename = '05_CREATE_TRIGGERS.sql'
+            with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- TRIGGERS\n\n")
                 for trigger in triggers:
                     f.write(self.format_trigger(trigger))
                     f.write("\n")
+            written_files.append(filename)
 
         # 06: Views
         if views:
-            with open(os.path.join(self.output_dir, '06_CREATE_VIEWS.sql'), 'w', encoding='utf-8') as f:
+            filename = '06_CREATE_VIEWS.sql'
+            with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- VIEWS\n\n")
                 for view in views:
                     f.write(self.format_view(view))
                     f.write("\n")
+            written_files.append(filename)
 
         # 07: Procedures
         if procedures:
-            with open(os.path.join(self.output_dir, '07_CREATE_PROCEDURES.sql'), 'w', encoding='utf-8') as f:
+            filename = '07_CREATE_PROCEDURES.sql'
+            with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- STORED PROCEDURES\n\n")
                 for proc in procedures:
                     f.write(self.format_procedure(proc))
                     f.write("\n")
+            written_files.append(filename)
 
         # 08: Functions
         if functions:
-            with open(os.path.join(self.output_dir, '08_CREATE_FUNCTIONS.sql'), 'w', encoding='utf-8') as f:
+            filename = '08_CREATE_FUNCTIONS.sql'
+            with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- FUNCTIONS\n\n")
                 for func in functions:
                     f.write(self.format_function(func))
                     f.write("\n")
+            written_files.append(filename)
 
         # 09: Deferred foreign keys (for circular dependencies)
         if deferred_foreign_keys:
-            with open(os.path.join(self.output_dir, '09_CREATE_DEFERRED_FKS.sql'), 'w', encoding='utf-8') as f:
+            filename = '09_CREATE_DEFERRED_FKS.sql'
+            with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- DEFERRED FOREIGN KEYS (Circular Dependencies)\n\n")
                 for fk in deferred_foreign_keys:
                     f.write(self.format_foreign_key(fk))
                     f.write("\n")
+            written_files.append(filename)
 
         # 10: Seed data
         if seed_data:
-            with open(os.path.join(self.output_dir, '10_SEED_DATA.sql'), 'w', encoding='utf-8') as f:
+            filename = '10_SEED_DATA.sql'
+            with open(os.path.join(self.output_dir, filename), 'w', encoding='utf-8') as f:
                 f.write(header)
                 f.write("-- SEED DATA\n\n")
                 for stmt in seed_data:
                     f.write(stmt)
                     f.write("\n")
+            written_files.append(filename)
+
+        self._write_deploy_scripts(written_files)
 
         logger.info(f"Modular SQL scripts written to {self.output_dir}")
+
+    def _write_deploy_scripts(self, sql_files: List[str]) -> None:
+        """Write deploy.sh and deploy.ps1 scripts that run the given SQL files in order via sqlcmd.
+
+        Args:
+            sql_files: Modular SQL filenames, in the order they should be deployed
+        """
+        sh_lines = [
+            "#!/usr/bin/env bash",
+            "set -euo pipefail",
+            "",
+            ': "${1:?Usage: deploy.sh <server> <database> [user] [password]}"',
+            ': "${2:?Usage: deploy.sh <server> <database> [user] [password]}"',
+            "SERVER=\"$1\"",
+            "DATABASE=\"$2\"",
+            "SQLUSER=\"${3:-}\"",
+            "SQLPASSWORD=\"${4:-}\"",
+            "",
+            'SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"',
+            "",
+            "FILES=(",
+        ]
+        sh_lines.extend(f'    "{name}"' for name in sql_files)
+        sh_lines.extend([
+            ")",
+            "",
+            'for f in "${FILES[@]}"; do',
+            '    echo "Deploying $f..."',
+            '    if [ -n "$SQLUSER" ]; then',
+            '        sqlcmd -S "$SERVER" -d "$DATABASE" -U "$SQLUSER" -P "$SQLPASSWORD" -i "$SCRIPT_DIR/$f" -b',
+            "    else",
+            '        sqlcmd -S "$SERVER" -d "$DATABASE" -E -i "$SCRIPT_DIR/$f" -b',
+            "    fi",
+            "done",
+            "",
+        ])
+
+        sh_path = os.path.join(self.output_dir, 'deploy.sh')
+        with open(sh_path, 'w', encoding='utf-8', newline='\n') as f:
+            f.write('\n'.join(sh_lines))
+        try:
+            os.chmod(sh_path, 0o755)
+        except OSError:
+            pass
+
+        ps1_lines = [
+            "param(",
+            "    [Parameter(Mandatory = $true)][string]$Server,",
+            "    [Parameter(Mandatory = $true)][string]$Database,",
+            "    [string]$User,",
+            "    [string]$Password",
+            ")",
+            "",
+            "$ErrorActionPreference = 'Stop'",
+            "$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path",
+            "",
+            "$Files = @(",
+        ]
+        ps1_lines.extend(f"    '{name}'" for name in sql_files)
+        ps1_lines.extend([
+            ")",
+            "",
+            "foreach ($f in $Files) {",
+            '    Write-Host "Deploying $f..."',
+            "    $path = Join-Path $ScriptDir $f",
+            "    if ($User) {",
+            "        sqlcmd -S $Server -d $Database -U $User -P $Password -i $path -b",
+            "    } else {",
+            "        sqlcmd -S $Server -d $Database -E -i $path -b",
+            "    }",
+            "    if ($LASTEXITCODE -ne 0) { throw \"Deployment failed on $f\" }",
+            "}",
+            "",
+        ])
+
+        ps1_path = os.path.join(self.output_dir, 'deploy.ps1')
+        with open(ps1_path, 'w', encoding='utf-8', newline='\n') as f:
+            f.write('\n'.join(ps1_lines))
+
+        logger.info(f"Deployment scripts written to {self.output_dir}")
+
+    def write_readme(
+        self,
+        output_format: str,
+        schemas: List[SchemaInfo],
+        tables: List[TableInfo],
+        views: List[Dict[str, Any]],
+        procedures: List[Dict[str, Any]],
+        functions: List[Dict[str, Any]],
+        triggers: List[Dict[str, Any]],
+        indexes: List[IndexInfo],
+        deferred_foreign_keys: List[ForeignKeyInfo],
+        has_seed_data: bool
+    ) -> None:
+        """Generate a README.md summarizing the extracted schema.
+
+        Args:
+            output_format: 'single', 'per-object', or 'modular'
+            schemas: List of schemas
+            tables: List of tables (in dependency order)
+            views: List of views (in dependency order)
+            procedures: List of procedures
+            functions: List of functions
+            triggers: List of triggers
+            indexes: List of indexes
+            deferred_foreign_keys: Foreign keys deferred due to circular dependencies
+            has_seed_data: Whether seed data was extracted
+        """
+        lines = ["# Database Schema Export", ""]
+
+        if not self.omit_ts:
+            lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            lines.append("")
+
+        lines.append("## Objects")
+        lines.append("")
+        lines.append(f"- Schemas: {len(schemas)}")
+        lines.append(f"- Tables: {len(tables)}")
+        lines.append(f"- Indexes: {len(indexes)}")
+        lines.append(f"- Views: {len(views)}")
+        lines.append(f"- Stored Procedures: {len(procedures)}")
+        lines.append(f"- Functions: {len(functions)}")
+        lines.append(f"- Triggers: {len(triggers)}")
+        lines.append("")
+
+        def list_section(title: str, items: List[Any], name_fn) -> None:
+            if not items:
+                return
+            lines.append(f"### {title}")
+            lines.append("")
+            for item in items:
+                lines.append(f"- {name_fn(item)}")
+            lines.append("")
+
+        list_section("Tables", tables, lambda t: f"{t.schema_name}.{t.table_name}")
+        list_section("Views", views, lambda v: f"{v['schema_name']}.{v['view_name']}")
+        list_section("Stored Procedures", procedures, lambda p: f"{p['schema_name']}.{p['procedure_name']}")
+        list_section("Functions", functions, lambda fn: f"{fn['schema_name']}.{fn['function_name']}")
+        list_section("Triggers", triggers, lambda t: f"{t['schema_name']}.{t['table_name']}.{t['trigger_name']}")
+
+        lines.append("## Dependencies")
+        lines.append("")
+        lines.append("- Tables are ordered by foreign key dependency (a referenced table is created before the table that references it).")
+        if deferred_foreign_keys:
+            lines.append(
+                f"- {len(deferred_foreign_keys)} foreign key(s) form a circular dependency and are added "
+                "after all tables are created, rather than inline with the table's other foreign keys."
+            )
+        lines.append("- Views are ordered so a view referenced by another view is created first.")
+        lines.append("")
+
+        lines.append("## Deployment")
+        lines.append("")
+        if output_format == 'modular':
+            lines.append(
+                "Run the numbered `.sql` files in order (01, 02, 03, ...), or use the generated "
+                "`deploy.sh` (Linux/macOS) or `deploy.ps1` (Windows) script, which runs them in order via `sqlcmd`:"
+            )
+            lines.append("")
+            lines.append("```")
+            lines.append("./deploy.sh <server> <database> [user] [password]")
+            lines.append(".\\deploy.ps1 -Server <server> -Database <database> [-User <user> -Password <password>]")
+            lines.append("```")
+            lines.append("")
+            lines.append("Omit user/password to connect with Windows/trusted authentication.")
+        elif output_format == 'single':
+            lines.append(
+                "Run `schema.sql` against the target database (e.g. with `sqlcmd` or SQL Server Management Studio). "
+                "Objects are already ordered by dependency within the file."
+            )
+        else:
+            lines.append(
+                "Objects are organized into subdirectories by type (Tables/, Constraints/, Indexes/, Triggers/, "
+                "Views/, Procedures/, Functions/, SeedData/). Deploy the subdirectories in that order; there is no "
+                "single combined script for this format."
+            )
+        lines.append("")
+
+        if has_seed_data:
+            lines.append("Seed data is included and should be applied after all schema objects are created.")
+            lines.append("")
+
+        path = os.path.join(self.output_dir, 'README.md')
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(lines))
+
+        logger.info(f"README written to {path}")

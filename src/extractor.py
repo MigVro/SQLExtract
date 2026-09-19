@@ -207,6 +207,19 @@ class DatabaseExtractor:
                     seed_data=seed_data
                 )
 
+            formatter.write_readme(
+                output_format=output_format,
+                schemas=schemas,
+                tables=ordered_tables,
+                views=views,
+                procedures=procedures,
+                functions=functions,
+                triggers=triggers,
+                indexes=indexes,
+                deferred_foreign_keys=deferred_fks,
+                has_seed_data=bool(seed_data)
+            )
+
             logger.info("Extraction complete!")
 
         except Exception as e:
