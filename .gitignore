@@ -52,3 +52,4 @@ Thumbs.db
 dev-svdb-*
 output/
 *.sql
+.claude/settings.local.json
