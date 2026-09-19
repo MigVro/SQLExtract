@@ -204,10 +204,14 @@ class SchemaReader:
 
         views = []
         for row in results:
+            if row.definition is None:
+                logger.warning(f"View {row.schema_name}.{row.view_name} is encrypted - skipping")
+                continue
+
             views.append({
                 'schema_name': row.schema_name,
                 'view_name': row.view_name,
-                'definition': row.definition
+                'definition': row.definition.replace('\r\n', '\n')
             })
 
         logger.info(f"Found {len(views)} views")
@@ -249,7 +253,7 @@ class SchemaReader:
             procedures.append({
                 'schema_name': row.schema_name,
                 'procedure_name': row.procedure_name,
-                'definition': row.definition
+                'definition': row.definition.replace('\r\n', '\n')
             })
 
         logger.info(f"Found {len(procedures)} stored procedures")
@@ -285,11 +289,15 @@ class SchemaReader:
 
         functions = []
         for row in results:
+            if row.definition is None:
+                logger.warning(f"Function {row.schema_name}.{row.function_name} is encrypted - skipping")
+                continue
+
             functions.append({
                 'schema_name': row.schema_name,
                 'function_name': row.function_name,
                 'function_type': row.function_type,
-                'definition': row.definition
+                'definition': row.definition.replace('\r\n', '\n')
             })
 
         logger.info(f"Found {len(functions)} functions")
