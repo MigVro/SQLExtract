@@ -21,6 +21,7 @@ logger = get_logger(__name__)
 @click.option('--format', 'output_format', type=click.Choice(['single', 'per-object', 'modular']), default='modular', help='Output format (default: modular)')
 @click.option('--clean', is_flag=True, help='Delete the output directory before extraction')
 @click.option('--omit-ts', is_flag=True, help='Omit the generation timestamp from output headers')
+@click.option('--no-header', is_flag=True, help='Omit the header comment block from output files entirely')
 @click.option('--schemas', help='Comma-separated list of schemas to extract')
 @click.option('--seed-data', is_flag=True, help='Extract seed data from tables')
 @click.option('--tables', help='Comma-separated list of tables for seed data (format: schema.table)')
@@ -41,6 +42,7 @@ def main(
     output_format: str,
     clean: bool,
     omit_ts: bool,
+    no_header: bool,
     schemas: str,
     seed_data: bool,
     tables: str,
@@ -119,7 +121,8 @@ def main(
             max_rows=max_rows,
             output_format=output_format,
             clean=clean,
-            omit_ts=omit_ts
+            omit_ts=omit_ts,
+            no_header=no_header
         )
 
         click.echo(f"\n✓ Extraction complete! SQL scripts written to: {output}")

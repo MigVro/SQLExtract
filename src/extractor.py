@@ -36,7 +36,8 @@ class DatabaseExtractor:
         max_rows: Optional[int] = None,
         output_format: str = 'modular',
         clean: bool = False,
-        omit_ts: bool = False
+        omit_ts: bool = False,
+        no_header: bool = False
     ) -> None:
         """Extract database schema and data.
 
@@ -49,6 +50,7 @@ class DatabaseExtractor:
             output_format: Output format - 'single', 'per-object', or 'modular'
             clean: Delete the output directory before extraction
             omit_ts: Omit the generation timestamp from output headers
+            no_header: Omit the header comment block from output files entirely
         """
         try:
             # Connect to database
@@ -61,7 +63,7 @@ class DatabaseExtractor:
             constraint_extractor = ConstraintExtractor(self.connection)
             index_extractor = IndexExtractor(self.connection)
             seed_data_extractor = SeedDataExtractor(self.connection)
-            formatter = SQLFormatter(output_dir, omit_ts=omit_ts)
+            formatter = SQLFormatter(output_dir, omit_ts=omit_ts, no_header=no_header)
 
             # Extract schemas
             logger.info("Extracting schemas...")

@@ -375,6 +375,7 @@ sqlextract/
 --clean               Delete the output directory before extraction
 --omit-ts             Omit the generation timestamp from output headers (avoids
                       spurious diffs when re-extracting an unchanged schema)
+--no-header           Omit the header comment block from output files entirely
 --script-drops        Include DROP statements
 --script-permissions  Include permissions (GRANT/DENY)
 --include-comments    Include extended properties as comments
