@@ -199,7 +199,7 @@ GO
                 f"@level1type=N'TABLE', @level1name=N'{table_name}'\nGO\n"
             )
 
-        for column_name, description in properties.get('columns', {}).items():
+        for column_name, description in sorted(properties.get('columns', {}).items()):
             if not description:
                 continue
             statements.append(

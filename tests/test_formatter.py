@@ -85,6 +85,28 @@ class TestSQLFormatter:
         assert "@value=N'Primary key.'" in sql
         assert "Notes" not in sql  # No description -> not emitted
 
+    def test_format_extended_properties_stable_column_order(self):
+        """Test column descriptions have stable output regardless of input order."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            formatter = SQLFormatter(tmpdir)
+            columns = {
+                "Unknown_YN": "Use this value if no eExact_id can be found",
+                "GeneralLedgerType": "1 = sales; 2 = purchase; 3 = stock",
+            }
+            properties = {'table_description': "Article codes", 'columns': columns}
+            reversed_properties = {
+                'table_description': properties['table_description'],
+                'columns': dict(reversed(list(columns.items()))),
+            }
+
+            sql = formatter.format_extended_properties("dbo", "ArticleExactCode", properties)
+
+            assert sql == formatter.format_extended_properties(
+                "dbo", "ArticleExactCode", reversed_properties
+            )
+            assert sql.index("Article codes") < sql.index("GeneralLedgerType")
+            assert sql.index("GeneralLedgerType") < sql.index("Unknown_YN")
+
     def test_format_extended_properties_empty(self):
         """Test formatting extended properties for a table with no descriptions."""
         formatter = SQLFormatter("/tmp/test")
