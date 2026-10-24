@@ -1,5 +1,6 @@
 # SQL Extract - Universal SQL Server Schema Extractor
 
+[![CI](https://github.com/MigVro/SQLExtract/actions/workflows/ci.yml/badge.svg)](https://github.com/MigVro/SQLExtract/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
@@ -17,7 +18,7 @@ Microsoft's `mssql-scripter` exists but has limitations:
 - ✅ **Complete schema extraction** (schemas, types, sequences, tables, constraints, indexes, views, procedures, functions, triggers, extended properties)
 - ✅ **Intelligent dependency ordering** (tables/views ordered by FK and view-to-view dependencies, with circular FKs deferred)
 - ✅ **Seed data extraction** with table/row-count filtering
-- ✅ **Multiple output formats** (single file, per-object, modular deployment scripts)
+- ✅ **Multiple output formats** (single file, per-object, per-object consolidated, modular deployment scripts)
 - ✅ **Cross-platform** (Windows, Linux, macOS — anywhere the ODBC Driver for SQL Server runs)
 - ✅ **CI/CD ready** (documented exit codes, `--quiet`/`--log-file`, `--dry-run`)
 - ✅ **Parallel extraction** (concurrent metadata/seed-data queries, each on its own connection)
@@ -277,7 +278,6 @@ SQLExtract/
 - **Python 3.9+**
 - **pyodbc** — SQL Server connectivity (Windows Auth, SQL Auth, Azure SQL)
 - **Click** — CLI framework
-- **Jinja2** — SQL template engine
 - **rich** — logging and progress bars
 - **pytest** — testing framework
 

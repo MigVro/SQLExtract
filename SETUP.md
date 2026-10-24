@@ -23,9 +23,8 @@ This guide helps developers set up their environment for contributing to SQL Ext
 
 ### 1. Clone Repository
 ```bash
-cd /mnt/d/dev2
-git clone https://github.com/your-org/sqlextract.git
-cd sqlextract
+git clone https://github.com/MigVro/SQLExtract.git
+cd SQLExtract
 ```
 
 ### 2. Create Virtual Environment
@@ -63,9 +62,8 @@ python sqlextract.py --help
 # Run tests
 pytest
 
-# Check code style
-black --check src/
-mypy src/
+# Check code style (same check CI runs)
+black --check src tests sqlextract.py
 ```
 
 ---
@@ -83,8 +81,8 @@ pytest --cov=src --cov-report=html
 # Run specific test file
 pytest tests/test_extractor.py
 
-# Run specific test
-pytest tests/test_extractor.py::test_extract_tables
+# Run specific test class or test
+pytest tests/test_extractor.py::TestDryRun
 
 # Run in verbose mode
 pytest -v
@@ -99,13 +97,17 @@ pytest -s
 black src/ tests/
 
 # Check formatting without changes
-black --check src/
+black --check src tests sqlextract.py
 
 # Format specific file
 black src/extractor.py
 ```
 
+black is pinned to 26.10.1 in `requirements-dev.txt` (Python 3.10+ only) so local and CI
+formatting agree.
+
 ### Type Checking
+mypy is not yet clean (see TODO.md Phase 9) and is not a CI gate.
 ```bash
 # Check all code
 mypy src/
@@ -126,31 +128,28 @@ pylint src/
 flake8 src/
 ```
 
+### Continuous Integration
+`.github/workflows/ci.yml` runs on every push to `master` and on pull requests: `pytest` on
+Python 3.9–3.12 and `black --check` on 3.12. Integration tests are skipped in CI (they need
+Windows Authentication). Gitea Actions are disabled via an empty `.gitea/workflows/`.
+
 ---
 
 ## Setting Up Test Database
 
-### Option 1: Docker (Recommended)
+### Option 1: Docker
+`docker-compose.yml` defines container `sqlextract-test-db` (SQL Server 2022, `sa` /
+`Test@Password123!`). Useful for manual extraction runs; the automated integration tests
+need Windows Authentication instead (see Option 2).
 ```bash
-# Start SQL Server container
-docker run -d \
-  --name sqlextract-test \
-  -e 'ACCEPT_EULA=Y' \
-  -e 'SA_PASSWORD=YourStrong@Passw0rd' \
-  -p 1433:1433 \
-  mcr.microsoft.com/mssql/server:2022-latest
+docker-compose up -d
 
-# Wait for SQL Server to start (30 seconds)
-sleep 30
+docker exec sqlextract-test-db /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P "Test@Password123!" -C \
+  -Q "CREATE DATABASE SQLExtractTest"
 
-# Create test database
-docker exec sqlextract-test /opt/mssql-tools/bin/sqlcmd \
-  -S localhost -U sa -P 'YourStrong@Passw0rd' \
-  -Q 'CREATE DATABASE TestDB'
-
-# Run test schema script
-docker exec -i sqlextract-test /opt/mssql-tools/bin/sqlcmd \
-  -S localhost -U sa -P 'YourStrong@Passw0rd' -d TestDB \
+docker exec -i sqlextract-test-db /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P "Test@Password123!" -d SQLExtractTest -C \
   < tests/fixtures/test_schema.sql
 ```
 
@@ -198,242 +197,90 @@ sqlextract/
 ├── .gitignore             # Git ignore patterns
 ├── requirements.txt       # Production dependencies
 ├── requirements-dev.txt   # Development dependencies
+├── CONTRIBUTING.md        # Contribution guidelines
+├── CLAUDE.md              # Guidance for Claude Code
 ├── pyproject.toml         # Python project config
-├── setup.py               # Package setup (alternative)
 ├── Dockerfile             # Container image
-├── docker-compose.yml     # Docker services
+├── docker-compose.yml     # Test SQL Server container
+├── test-extraction.sh     # Docker-based manual extraction smoke test
+├── .github/workflows/     # CI (GitHub Actions)
+├── .gitea/workflows/      # Empty on purpose: disables Gitea Actions
+├── .claude/settings.json  # Claude Code hook: black on edited .py files
 │
 ├── sqlextract.py          # CLI entry point
 │
 ├── src/                   # Source code
 │   ├── __init__.py
-│   ├── cli.py             # CLI argument parsing
-│   ├── connection.py      # Database connectivity
-│   ├── extractor.py       # Core extraction orchestration
-│   ├── schema.py          # Schema introspection
-│   ├── tables.py          # Table extraction
+│   ├── cli.py             # CLI argument parsing, exit codes
+│   ├── connection.py      # Database connectivity, retries
+│   ├── extractor.py       # Extraction orchestration, parallel jobs
+│   ├── schema.py          # Introspection: tables, columns, views, procedures, functions,
+│   │                      #   triggers, sequences, types, extended properties
 │   ├── constraints.py     # Constraint extraction
 │   ├── indexes.py         # Index extraction
-│   ├── views.py           # View extraction
-│   ├── procedures.py      # Stored procedure extraction
-│   ├── functions.py       # Function extraction
-│   ├── triggers.py        # Trigger extraction
-│   ├── sequences.py       # Sequence extraction
 │   ├── seed_data.py       # Data extraction
 │   ├── dependency.py      # Dependency analysis
-│   ├── formatter.py       # Output formatting
-│   └── utils.py           # Utilities and logging
+│   ├── formatter.py       # SQL generation and output formats
+│   └── utils.py           # Utilities, logging, exceptions
 │
-├── tests/                 # Tests
-│   ├── __init__.py
-│   ├── conftest.py        # Pytest configuration
-│   ├── test_connection.py
-│   ├── test_extractor.py
-│   ├── test_tables.py
-│   ├── test_constraints.py
-│   ├── test_indexes.py
-│   ├── test_views.py
-│   ├── test_procedures.py
-│   ├── test_seed_data.py
-│   ├── test_dependency.py
-│   ├── test_formatter.py
-│   └── fixtures/
-│       ├── test_schema.sql      # Test database schema
-│       └── sample_database.sql  # Sample database for integration tests
-│
-├── examples/              # Example scripts
-│   ├── extract_prod.sh
-│   ├── extract_dev.sh
-│   └── compare_schemas.sh
-│
-└── docs/                  # Additional documentation
-    ├── architecture.md
-    ├── api_reference.md
-    └── contributing.md
+└── tests/                 # Tests
+    ├── __init__.py
+    ├── conftest.py        # Pytest configuration
+    ├── test_cli.py
+    ├── test_connection.py
+    ├── test_constraints.py
+    ├── test_dependency.py
+    ├── test_extractor.py
+    ├── test_formatter.py
+    ├── test_indexes.py
+    ├── test_integration.py  # Real-server tests (SQLEXTRACT_TEST_SERVER)
+    ├── test_schema.py
+    ├── test_seed_data.py
+    ├── test_utils.py
+    └── fixtures/
+        └── test_schema.sql  # Test database schema
 ```
 
 ---
 
 ## Configuration Files
 
-### requirements.txt
-```txt
-pyodbc>=4.0.35
-click>=8.1.0
-jinja2>=3.1.0
-pyyaml>=6.0
-rich>=13.0.0
-```
+- `requirements.txt` / `requirements-dev.txt`: runtime and development dependencies
+- `pyproject.toml`: package metadata, the `sqlextract` console script, and black, mypy,
+  pytest and coverage settings (black line length 100; pytest adds `-v` and coverage by default)
+- `.gitignore`: Python, test, IDE and OS artifacts
 
-### requirements-dev.txt
-```txt
-pytest>=7.4.0
-pytest-cov>=4.1.0
-pytest-mock>=3.11.0
-black>=23.0.0
-mypy>=1.5.0
-pylint>=2.17.0
-flake8>=6.0.0
-types-PyYAML>=6.0.0
-```
-
-### pyproject.toml
-```toml
-[build-system]
-requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "sqlextract"
-version = "1.0.0"
-description = "Universal SQL Server schema extractor"
-readme = "README.md"
-requires-python = ">=3.9"
-license = {text = "MIT"}
-authors = [
-    {name = "Your Name", email = "your.email@example.com"}
-]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-]
-dependencies = [
-    "pyodbc>=4.0.35",
-    "click>=8.1.0",
-    "jinja2>=3.1.0",
-    "pyyaml>=6.0",
-    "rich>=13.0.0",
-]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.4.0",
-    "pytest-cov>=4.1.0",
-    "pytest-mock>=3.11.0",
-    "black>=23.0.0",
-    "mypy>=1.5.0",
-    "pylint>=2.17.0",
-    "flake8>=6.0.0",
-    "types-PyYAML>=6.0.0",
-]
-
-[project.scripts]
-sqlextract = "src.cli:main"
-
-[tool.black]
-line-length = 100
-target-version = ['py39', 'py310', 'py311', 'py312']
-include = '\.pyi?$'
-
-[tool.mypy]
-python_version = "3.9"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-addopts = "-v --cov=src --cov-report=term-missing"
-
-[tool.coverage.run]
-source = ["src"]
-omit = ["tests/*", "venv/*"]
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if __name__ == .__main__.:",
-]
-```
-
-### .gitignore
-```gitignore
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-env/
-ENV/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Project-specific
-output/
-*.log
-config.yaml
-secrets.yaml
-```
+See the files themselves for current contents.
 
 ---
 
 ## VS Code Setup
 
 ### Recommended Extensions
-- Python (ms-python.python)
+- Python (ms-python.python) — includes test discovery
 - Pylance (ms-python.vscode-pylance)
-- Python Test Explorer (littlefoxteam.vscode-python-test-adapter)
 - Black Formatter (ms-python.black-formatter)
+- Pylint (ms-python.pylint)
+- Flake8 (ms-python.flake8)
+- Mypy Type Checker (ms-python.mypy-type-checker)
 - autoDocstring (njpwerner.autodocstring)
 - GitLens (eamodio.gitlens)
 
 ### settings.json
+Linting and formatting are configured through their own extensions; the old
+`python.linting.*` and `python.formatting.provider` settings are no longer supported.
+On Windows use `venv/Scripts/python.exe` as the interpreter path.
 ```json
 {
   "python.defaultInterpreterPath": "${workspaceFolder}/venv/bin/python",
-  "python.linting.enabled": true,
-  "python.linting.pylintEnabled": true,
-  "python.linting.flake8Enabled": true,
-  "python.formatting.provider": "black",
   "python.testing.pytestEnabled": true,
   "python.testing.pytestArgs": ["tests"],
-  "editor.formatOnSave": true,
-  "editor.codeActionsOnSave": {
-    "source.organizeImports": true
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
   }
 }
 ```
@@ -449,14 +296,14 @@ secrets.yaml
   "configurations": [
     {
       "name": "Python: Current File",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "program": "${file}",
       "console": "integratedTerminal"
     },
     {
       "name": "SQL Extract: Run CLI",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/sqlextract.py",
       "args": [
@@ -470,7 +317,7 @@ secrets.yaml
     },
     {
       "name": "Python: pytest",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "module": "pytest",
       "args": ["-v"],
@@ -497,15 +344,12 @@ touch tests/test_my_module.py
 ```
 
 ### Run Integration Tests
-```bash
-# Start test database
-docker-compose up -d
-
-# Run integration tests
-pytest tests/integration/
-
-# Stop database
-docker-compose down
+Integration tests are skipped unless `SQLEXTRACT_TEST_SERVER` is set. They connect with
+Windows Authentication, recreate scratch databases from `tests/fixtures/test_schema.sql` via
+`sqlcmd -E -C` (so `sqlcmd` must be on PATH), and redeploy the modular output with `deploy.ps1`.
+```powershell
+$env:SQLEXTRACT_TEST_SERVER = "localhost"
+pytest tests/test_integration.py
 ```
 
 ### Build Distribution
@@ -593,7 +437,7 @@ sqlextract --server myserver.database.windows.net --trust-cert ...
 
 ## Contributing
 
-See [docs/contributing.md](docs/contributing.md) for contribution guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 
 ---
 
@@ -606,4 +450,4 @@ See [docs/contributing.md](docs/contributing.md) for contribution guidelines.
 
 ---
 
-**Last Updated**: 2025-10-09
+**Last Updated**: 2026-10-24

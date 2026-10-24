@@ -128,13 +128,19 @@ pytest --cov=src --cov-report=html
 
 # Run specific test
 pytest tests/test_extractor.py -v
+
+# Integration tests (need a SQL Server reachable with Windows Authentication, sqlcmd on PATH)
+SQLEXTRACT_TEST_SERVER="<server[\instance]>" pytest tests/test_integration.py
 ```
+
+CI (GitHub Actions) runs `pytest` on Python 3.9–3.12 and `black --check` on every push and
+pull request; integration tests are skipped there.
 
 ### Code Quality
 
 ```bash
-# Format code
-black src/ tests/
+# Format code (CI fails if this would change anything)
+black src/ tests/ sqlextract.py
 
 # Type checking
 mypy src/

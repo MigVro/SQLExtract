@@ -80,12 +80,14 @@ Build a modern, cross-platform CLI tool that extracts complete SQL Server databa
 - **FR-FNC-001**: Extract scalar functions
 - **FR-FNC-002**: Extract table-valued functions (inline and multi-statement)
 - **FR-FNC-003**: Extract CLR functions (metadata only)
-- **FR-FNC-004**: Handle function dependencies
+- **FR-FNC-004**: Handle function dependencies — *not needed: SQL Server's deferred name
+  resolution means module creation order doesn't matter (decided 2026-09-19)*
 
 #### 2.1.8 Triggers
 - **FR-TRG-001**: Extract table triggers (AFTER, INSTEAD OF)
-- **FR-TRG-002**: Extract database triggers
-- **FR-TRG-003**: Preserve trigger order (if multiple triggers on same table)
+- **FR-TRG-002**: Extract database triggers — *out of scope for v1.0 (decided 2026-09-19)*
+- **FR-TRG-003**: Preserve trigger order (if multiple triggers on same table) — *out of scope
+  for v1.0 (decided 2026-09-19)*
 - **FR-TRG-004**: Extract trigger enabled/disabled state
 
 #### 2.1.9 Sequences
@@ -123,23 +125,31 @@ Build a modern, cross-platform CLI tool that extracts complete SQL Server databa
 - **FR-OUT-006**: Use object schema and name in filename (e.g., `MQTT.ReceiverConfig.sql`)
 
 #### 2.3.3 Modular Format
-- **FR-OUT-007**: Generate numbered files for deployment order:
+- **FR-OUT-007**: Generate numbered files for deployment order (empty sections are skipped):
   - `01_CREATE_SCHEMAS.sql`
-  - `02_CREATE_TABLES.sql`
-  - `03_CREATE_CONSTRAINTS.sql`
-  - `04_CREATE_INDEXES.sql`
-  - `05_CREATE_VIEWS.sql`
-  - `06_CREATE_PROCEDURES.sql`
-  - `07_CREATE_FUNCTIONS.sql`
-  - `08_CREATE_TRIGGERS.sql`
-  - `09_SEED_DATA.sql`
-- **FR-OUT-008**: Include deployment script (`deploy.sh` or `deploy.ps1`)
+  - `02_CREATE_TYPES.sql`
+  - `03_CREATE_SEQUENCES.sql`
+  - `04_CREATE_TABLES.sql`
+  - `05_CREATE_CONSTRAINTS.sql`
+  - `06_CREATE_INDEXES.sql`
+  - `07_CREATE_TRIGGERS.sql`
+  - `08_CREATE_VIEWS.sql`
+  - `09_CREATE_PROCEDURES.sql`
+  - `10_CREATE_FUNCTIONS.sql`
+  - `11_CREATE_DEFERRED_FKS.sql`
+  - `12_SEED_DATA.sql`
+- **FR-OUT-008**: Include deployment scripts (`deploy.sh` and `deploy.ps1`)
+
+#### 2.3.4 Per-Object Consolidated Format
+- **FR-OUT-009**: Per-object output where each table's file also contains its primary key,
+  unique/check constraints, indexes and triggers; foreign keys stay in separate files
 
 ### 2.4 Dependency Analysis
 
 - **FR-DEP-001**: Detect foreign key dependencies between tables
 - **FR-DEP-002**: Detect view dependencies on tables/views
-- **FR-DEP-003**: Detect procedure dependencies on tables/views
+- **FR-DEP-003**: Detect procedure dependencies on tables/views — *not needed: deferred name
+  resolution; procedures are created after tables and views anyway (decided 2026-09-19)*
 - **FR-DEP-004**: Generate dependency graph (optional, requires graphviz)
 - **FR-DEP-005**: Order objects to respect dependencies
 - **FR-DEP-006**: Handle circular dependencies gracefully (warn user)
@@ -217,7 +227,7 @@ Build a modern, cross-platform CLI tool that extracts complete SQL Server databa
 - **Python 3.9+** - Core language
 - **pyodbc** - SQL Server driver (ODBC-based)
 - **Click** - CLI framework
-- **Jinja2** - SQL template engine
+- **rich** - Logging and progress bars
 - **pytest** - Testing framework
 - **black** - Code formatter
 - **mypy** - Static type checker
@@ -237,7 +247,7 @@ Use `INFORMATION_SCHEMA` views and system catalog views:
 
 ### 4.3 SQL Generation
 
-- Use Jinja2 templates for SQL generation
+- Generate SQL in Python (`SQLFormatter`); a template engine was planned but not needed
 - Support SQL Server 2012+ syntax
 - Include comments with extraction metadata (date, tool version)
 - Add `IF EXISTS` checks for DROP statements
@@ -307,11 +317,11 @@ See [FUTURE.md](FUTURE.md) for:
 ### 7.1 Python Packages
 - `pyodbc >= 4.0.35` - SQL Server connectivity
 - `click >= 8.1.0` - CLI framework
-- `jinja2 >= 3.1.0` - Template engine
-- `pyyaml >= 6.0` - Config file parsing
+- `rich >= 13.0.0` - Logging and progress bars
+- `pyyaml >= 6.0` - Config file parsing (for FR-CLI-003; declared but not yet used)
 - `pytest >= 7.4.0` - Testing
 - `pytest-cov >= 4.1.0` - Coverage
-- `black >= 23.0.0` - Formatting
+- `black == 26.10.1` - Formatting (Python 3.10+)
 - `mypy >= 1.5.0` - Type checking
 
 ### 7.2 System Dependencies

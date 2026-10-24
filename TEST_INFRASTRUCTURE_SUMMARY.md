@@ -1,5 +1,9 @@
 # Test Infrastructure Summary
 
+> **Historical snapshot (2025-10-09).** Test counts and failures below are out of date.
+> As of 2026-10-24: 148 passed, 14 skipped (integration tests need `SQLEXTRACT_TEST_SERVER`),
+> 74% coverage. See [TODO.md](TODO.md) for current status.
+
 ## ✅ Completion Status
 
 **Complete test infrastructure has been successfully created for SQLExtract!**
