@@ -8,13 +8,15 @@
 - [x] Create `pyproject.toml` or `setup.py`
 - [x] Add `.gitignore` (Python, IDE files)
 - [x] Create `requirements.txt` and `requirements-dev.txt`
-- [x] Set up pre-commit hooks (black, mypy, pytest)
+- [ ] Set up pre-commit hooks (black, mypy, pytest) — no `.pre-commit-config.yaml` exists;
+      black now enforced via CI and a Claude Code format-on-edit hook instead (2026-10-24)
 - [x] Create initial directory structure
 
 ### Core Infrastructure ✅
 - [x] Database connection module (`src/connection.py`)
   - [x] Connection string parsing
-  - [x] Connection pooling
+  - [ ] Connection pooling — not implemented; parallel extraction opens one connection per
+        worker instead (2026-10-24)
   - [x] Retry logic with exponential backoff
   - [x] Connection validation
   - [x] Support for Windows Auth, SQL Auth, connection strings
@@ -26,7 +28,8 @@
   - [x] Argument parsing with Click
   - [x] Help text and examples
   - [x] Version display
-  - [x] Config file loading (YAML/JSON)
+  - [ ] Config file loading (YAML/JSON) — not implemented; no CLI option, and `pyyaml` is
+        declared but never imported (2026-10-24)
 
 ### Schema Introspection ✅
 - [x] Schema reader module (`src/schema.py`)
@@ -49,14 +52,15 @@
 ## Phase 2: Table Extraction (Week 2) ✅ COMPLETE
 
 ### Table Definition Extraction ✅
-- [x] Extract table columns (`src/tables.py`)
+- [x] Extract table columns (`src/schema.py: get_table_columns`, not a standalone `src/tables.py`)
   - [x] Column names, data types, precision, scale
   - [x] Nullability
   - [x] Default constraints
   - [x] Computed columns (persisted/non-persisted)
   - [x] Identity columns (seed, increment)
 - [x] Generate `CREATE TABLE` statements
-  - [x] Use Jinja2 templates
+  - [ ] Use Jinja2 templates — not used; SQL is built as plain strings in `SQLFormatter`,
+        and `jinja2` is declared but never imported (2026-10-24)
   - [x] Include IF EXISTS checks
   - [x] Proper formatting and indentation
 
@@ -175,14 +179,17 @@
   - [x] `SET IDENTITY_INSERT ON/OFF`
   - [x] Proper formatting
 - [x] Support filtering
-  - [x] Table whitelist/blacklist
-  - [x] WHERE clause filters
+  - [x] Table whitelist (`--tables`)
+  - [ ] Table blacklist — not implemented (2026-10-24)
+  - [ ] WHERE clause filters — `where_clause` exists on `SeedDataExtractor.extract_table_data`
+        but is not exposed on the CLI (2026-10-24)
   - [x] Row count limits
 
-### Dependency Ordering for Data ✅
+### Dependency Ordering for Data
 - [x] Order data insertion by FK dependencies
-- [x] Disable FK constraints during data load (optional)
-- [x] Re-enable FK constraints after load
+- [ ] Disable FK constraints during data load (optional) — no `NOCHECK CONSTRAINT` emitted
+      for FKs in `src/` (2026-10-24)
+- [ ] Re-enable FK constraints after load — see above (2026-10-24)
 
 ### Testing ✅
 - [x] Unit tests for data extraction (5 tests)
@@ -204,6 +211,15 @@
   - [x] Create subdirectories (tables/, procedures/, etc.)
   - [x] Generate filenames from schema and object name
   - [x] Write each object to separate file
+
+### Per-Object Consolidated Format ✅
+- [x] `--format per-object-cons`: per-object, but each table's PK, unique/check constraints,
+      indexes and triggers are bundled into its `Tables/` file (like SSMS "Script Table as
+      CREATE To"); FKs stay separate to avoid order-dependent deploys (2026-09-19)
+
+### Deterministic Output ✅
+- [x] Table/view dependency ordering is stable across runs (ties broken by name) (2026-09-19)
+- [x] Column extended properties emitted in name order across all formats (2026-10-13)
 
 ### Modular Format ✅
 - [x] Implement modular file output
@@ -353,26 +369,33 @@
 ## Phase 9: Packaging and Distribution (Week 9)
 
 ### Packaging
-- [ ] Create `pyproject.toml` for Poetry or setuptools
-- [ ] Define package metadata (name, version, author, license)
+- [x] Create `pyproject.toml` (setuptools) (verified present 2026-10-24)
+- [x] Define package metadata (name, version, author, license) (verified present 2026-10-24)
 - [ ] Create wheel and source distribution
 - [ ] Test installation with pip
+- [ ] Remove unused `jinja2` and `pyyaml` dependencies (2026-10-24)
 
 ### Docker
-- [ ] Create Dockerfile
-- [ ] Create Docker Compose for testing
+- [x] Create Dockerfile (verified present 2026-10-24)
+- [x] Create Docker Compose for testing (verified present 2026-10-24)
 - [ ] Push to Docker Hub
 - [ ] Test Docker image on different platforms
 
 ### CI/CD
-- [ ] Set up GitHub Actions or GitLab CI
-  - [ ] Run tests on push
-  - [ ] Run tests on multiple Python versions (3.9, 3.10, 3.11, 3.12)
-  - [ ] Run tests on multiple platforms (Windows, Linux, macOS)
+- [x] Set up GitHub Actions (`.github/workflows/ci.yml`) (2026-10-24)
+  - [x] Run tests on push to master and on pull requests (2026-10-24)
+  - [x] Run tests on multiple Python versions (3.9, 3.10, 3.11, 3.12) (2026-10-24)
+  - [ ] Run tests on multiple platforms (Windows, Linux, macOS) — Ubuntu only
+  - [ ] Run integration tests in CI — blocked: they use Windows Auth and `deploy.ps1`
   - [ ] Build and publish Docker image
   - [ ] Build and publish to PyPI (on tag)
+- [x] Gitea Actions disabled via empty `.gitea/workflows/`; CI runs on GitHub only (2026-10-24)
 - [ ] Set up code coverage reporting (Codecov or Coveralls)
-- [ ] Set up linting (black, mypy, pylint)
+- [ ] Set up linting
+  - [x] black (`--check` on the 3.12 job; pinned to 26.10.1) (2026-10-24)
+  - [ ] mypy — 16 errors in 5 files to fix first (2026-10-24)
+  - [ ] flake8 — 108 findings to fix first (2026-10-24)
+  - [ ] pylint
 
 ### Release
 - [ ] Tag v1.0.0
@@ -401,8 +424,8 @@ See [FUTURE.md](FUTURE.md) for:
 
 ## Testing Milestones
 
-### Milestone 1: Unit Test Coverage ✅
-- [x] Achieve 80%+ test coverage (77 passing tests)
+### Milestone 1: Unit Test Coverage
+- [ ] Achieve 80%+ test coverage — currently 74% (148 passed, 14 skipped) (2026-10-24)
 - [x] All core modules have unit tests
 - [x] All edge cases covered
 
@@ -479,6 +502,27 @@ Before releasing v1.0:
 ---
 
 ## Recent Updates
+
+### 2026-10-24: CI, Formatting, and Checklist Corrections
+- **Added**: GitHub Actions workflow (`.github/workflows/ci.yml`) running `pytest` on Python
+  3.9–3.12 and `black --check` on 3.12. Gitea Actions disabled with an empty
+  `.gitea/workflows/.gitkeep` (its runner's checkout used a URL without the `/gitea` path).
+- **Changed**: whole codebase reformatted with black (formatting-only commit); black pinned
+  to 26.10.1 with a `python_version >= "3.10"` marker since that release dropped 3.9.
+- **Added**: `.claude/settings.json` hook that runs black on every edited `.py` file.
+- **Refreshed**: CLAUDE.md to match the implemented modules, CLI options and formats.
+- **Corrected**: several items were checked but not actually implemented — pre-commit hooks,
+  config-file loading, connection pooling, Jinja2 templates, seed-data blacklist and CLI
+  WHERE filter, FK disable/re-enable around data load, and the 80% coverage milestone
+  (actual: 74%). Unchecked with notes.
+- **Measured**: mypy 16 errors, flake8 108 findings — not yet CI gates.
+
+### 2026-10-13: Deterministic Column Extended Properties
+- Column extended properties now emit in name order across all output formats.
+
+### 2026-09-19: Per-Object Consolidated Format and Deterministic Ordering
+- **Added**: `--format per-object-cons` (see Phase 6).
+- **Changed**: table/view dependency ordering made deterministic across runs.
 
 ### 2026-09-19: Phase 4 Remaining Gaps Closed (parameters, dependencies, CLR functions)
 - **Added**: `SchemaReader._get_parameters()` in `src/schema.py`, querying `sys.parameters`
@@ -837,9 +881,11 @@ Before releasing v1.0:
 
 ---
 
-**Last Updated**: 2026-09-19
-**Status**: Phases 1, 2, 3, 5, 6, 7, 8 Complete; Phase 4 Mostly Complete
-**Current Phase**: Phase 4's remaining gaps are closed — procedure parameter parsing
+**Last Updated**: 2026-10-24
+**Status**: Phases 1, 2, 3, 5, 6, 7, 8 Complete (with corrected gaps noted inline); Phase 4 Mostly Complete; Phase 9 In Progress
+**Current Phase** (2026-10-24): Phase 9 — CI on GitHub runs unit tests and black; packaging,
+Docker Hub/PyPI publishing, mypy/flake8 gates, and the 80% coverage target remain open.
+**Previous status** (2026-09-19): Phase 4's remaining gaps are closed — procedure parameter parsing
 (README signatures), procedure dependency ordering (closed as not needed — deferred name
 resolution), and CLR function metadata are all done (see 2026-09-19 "Phase 4 Remaining
 Gaps Closed" update). Only database-level DDL triggers and explicit trigger order remain
@@ -852,5 +898,5 @@ and README/docs (usage examples, troubleshooting section, FAQ) are all done, ver
 against a real SQL Server 2017 instance (see 2026-09-19 "Reopened and Completed" update).
 Only multi-version SQL Server testing (2012/2016/2019/2022), Azure SQL, and non-Windows
 platform testing remain deferred — genuinely blocked by the infrastructure available in
-this environment, not a scoping decision. Phase 9 (packaging/distribution) not started.
+this environment, not a scoping decision.
 **Estimated Completion**: Not re-estimated — verify remaining Phase 9 scope before committing to a timeline
