@@ -29,7 +29,9 @@ class DependencyGraph:
         if table_key not in self.graph:
             self.graph[table_key] = set()
 
-    def add_dependency(self, from_schema: str, from_table: str, to_schema: str, to_table: str) -> None:
+    def add_dependency(
+        self, from_schema: str, from_table: str, to_schema: str, to_table: str
+    ) -> None:
         """Add a dependency (foreign key relationship).
 
         Args:
@@ -132,7 +134,9 @@ class DependencyGraph:
         return sorted_tables, deferred_fks
 
 
-def build_dependency_graph(tables: List[Tuple[str, str]], foreign_keys: List[ForeignKeyInfo]) -> DependencyGraph:
+def build_dependency_graph(
+    tables: List[Tuple[str, str]], foreign_keys: List[ForeignKeyInfo]
+) -> DependencyGraph:
     """Build dependency graph from tables and foreign keys.
 
     Args:
@@ -151,16 +155,15 @@ def build_dependency_graph(tables: List[Tuple[str, str]], foreign_keys: List[For
     # Add foreign key dependencies
     for fk in foreign_keys:
         graph.add_dependency(
-            fk.schema_name,
-            fk.table_name,
-            fk.referenced_schema,
-            fk.referenced_table
+            fk.schema_name, fk.table_name, fk.referenced_schema, fk.referenced_table
         )
 
     return graph
 
 
-def order_tables_by_dependency(tables: List[Tuple[str, str]], foreign_keys: List[ForeignKeyInfo]) -> Tuple[List[Tuple[str, str]], List[ForeignKeyInfo]]:
+def order_tables_by_dependency(
+    tables: List[Tuple[str, str]], foreign_keys: List[ForeignKeyInfo]
+) -> Tuple[List[Tuple[str, str]], List[ForeignKeyInfo]]:
     """Order tables by their dependencies.
 
     Args:
@@ -181,7 +184,7 @@ def order_tables_by_dependency(tables: List[Tuple[str, str]], foreign_keys: List
     # Convert back to tuples
     ordered_tables = []
     for table_key in sorted_table_keys:
-        schema_name, table_name = table_key.split('.', 1)
+        schema_name, table_name = table_key.split(".", 1)
         ordered_tables.append((schema_name, table_name))
 
     # Find deferred foreign keys
@@ -196,8 +199,7 @@ def order_tables_by_dependency(tables: List[Tuple[str, str]], foreign_keys: List
 
 
 def order_views_by_dependency(
-    views: List[Dict[str, Any]],
-    dependencies: List[Tuple[str, str, str, str]]
+    views: List[Dict[str, Any]], dependencies: List[Tuple[str, str, str, str]]
 ) -> List[Dict[str, Any]]:
     """Order views so that a view referenced by another view is created first.
 
@@ -212,7 +214,7 @@ def order_views_by_dependency(
 
     graph = DependencyGraph()
     for view_key in view_map:
-        schema_name, view_name = view_key.split('.', 1)
+        schema_name, view_name = view_key.split(".", 1)
         graph.add_table(schema_name, view_name)
 
     for schema_name, view_name, ref_schema_name, ref_view_name in dependencies:

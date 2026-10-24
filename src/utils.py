@@ -27,20 +27,18 @@ def setup_logging(verbose: bool = False, quiet: bool = False, log_file: Optional
     handlers = []
 
     if not quiet:
-        handlers.append(RichHandler(console=console, rich_tracebacks=True, show_time=False, show_path=False))
+        handlers.append(
+            RichHandler(console=console, rich_tracebacks=True, show_time=False, show_path=False)
+        )
 
     if log_file:
         file_handler = logging.FileHandler(log_file)
         file_handler.setFormatter(
-            logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         )
         handlers.append(file_handler)
 
-    logging.basicConfig(
-        level=level,
-        format="%(message)s",
-        handlers=handlers
-    )
+    logging.basicConfig(level=level, format="%(message)s", handlers=handlers)
 
 
 def get_logger(name: str) -> logging.Logger:
@@ -81,9 +79,9 @@ def escape_sql_identifier(identifier: str) -> str:
         Escaped identifier in square brackets
     """
     # Remove existing brackets if present
-    identifier = identifier.strip('[]')
+    identifier = identifier.strip("[]")
     # Escape any existing closing brackets
-    identifier = identifier.replace(']', ']]')
+    identifier = identifier.replace("]", "]]")
     return f"[{identifier}]"
 
 
@@ -102,16 +100,19 @@ def escape_sql_string(value: str) -> str:
 
 class SQLExtractError(Exception):
     """Base exception for SQL Extract."""
+
     pass
 
 
 class ConnectionError(SQLExtractError):
     """Database connection error."""
+
     pass
 
 
 class AuthenticationError(ConnectionError):
     """Login/authentication failure."""
+
     pass
 
 
@@ -125,19 +126,23 @@ class DatabaseAccessError(ConnectionError):
     permission failures on objects *within* an already-open database (see
     PermissionDeniedError).
     """
+
     pass
 
 
 class PermissionDeniedError(ConnectionError):
     """Insufficient permissions to access a database object."""
+
     pass
 
 
 class ExtractionError(SQLExtractError):
     """Error during schema extraction."""
+
     pass
 
 
 class OutputError(SQLExtractError):
     """Error writing output files."""
+
     pass

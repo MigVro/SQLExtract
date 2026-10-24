@@ -230,11 +230,7 @@ class TestBuildDependencyGraph:
 
     def test_build_graph_simple(self):
         """Test building graph from tables and foreign keys."""
-        tables = [
-            ("dbo", "Config"),
-            ("MQTT", "Broker"),
-            ("MQTT", "ReceiverConfig")
-        ]
+        tables = [("dbo", "Config"), ("MQTT", "Broker"), ("MQTT", "ReceiverConfig")]
 
         foreign_keys = [
             ForeignKeyInfo(
@@ -246,7 +242,7 @@ class TestBuildDependencyGraph:
                 referenced_table="Broker",
                 referenced_columns=["BrokerID"],
                 delete_action="CASCADE",
-                update_action="NO_ACTION"
+                update_action="NO_ACTION",
             )
         ]
 
@@ -257,10 +253,7 @@ class TestBuildDependencyGraph:
 
     def test_build_graph_no_foreign_keys(self):
         """Test building graph with no foreign keys."""
-        tables = [
-            ("dbo", "Config"),
-            ("dbo", "Status")
-        ]
+        tables = [("dbo", "Config"), ("dbo", "Status")]
 
         foreign_keys = []
 
@@ -272,10 +265,7 @@ class TestBuildDependencyGraph:
 
     def test_build_graph_multi_column_fk(self):
         """Test building graph with multi-column foreign keys."""
-        tables = [
-            ("dbo", "Parent"),
-            ("dbo", "Child")
-        ]
+        tables = [("dbo", "Parent"), ("dbo", "Child")]
 
         foreign_keys = [
             ForeignKeyInfo(
@@ -287,7 +277,7 @@ class TestBuildDependencyGraph:
                 referenced_table="Parent",
                 referenced_columns=["Key1", "Key2"],
                 delete_action="NO_ACTION",
-                update_action="NO_ACTION"
+                update_action="NO_ACTION",
             )
         ]
 
@@ -302,11 +292,7 @@ class TestOrderTablesByDependency:
 
     def test_order_simple_dependency(self):
         """Test ordering tables with simple dependency."""
-        tables = [
-            ("MQTT", "ReceiverConfig"),
-            ("MQTT", "Broker"),
-            ("dbo", "Config")
-        ]
+        tables = [("MQTT", "ReceiverConfig"), ("MQTT", "Broker"), ("dbo", "Config")]
 
         foreign_keys = [
             ForeignKeyInfo(
@@ -318,7 +304,7 @@ class TestOrderTablesByDependency:
                 referenced_table="Broker",
                 referenced_columns=["BrokerID"],
                 delete_action="CASCADE",
-                update_action="NO_ACTION"
+                update_action="NO_ACTION",
             )
         ]
 
@@ -334,10 +320,7 @@ class TestOrderTablesByDependency:
 
     def test_order_circular_dependency(self):
         """Test ordering tables with circular dependency."""
-        tables = [
-            ("dbo", "TableA"),
-            ("dbo", "TableB")
-        ]
+        tables = [("dbo", "TableA"), ("dbo", "TableB")]
 
         foreign_keys = [
             ForeignKeyInfo(
@@ -349,7 +332,7 @@ class TestOrderTablesByDependency:
                 referenced_table="TableB",
                 referenced_columns=["ID"],
                 delete_action="NO_ACTION",
-                update_action="NO_ACTION"
+                update_action="NO_ACTION",
             ),
             ForeignKeyInfo(
                 constraint_name="FK_B_A",
@@ -360,8 +343,8 @@ class TestOrderTablesByDependency:
                 referenced_table="TableA",
                 referenced_columns=["ID"],
                 delete_action="NO_ACTION",
-                update_action="NO_ACTION"
-            )
+                update_action="NO_ACTION",
+            ),
         ]
 
         ordered_tables, deferred_fks = order_tables_by_dependency(tables, foreign_keys)
@@ -378,11 +361,7 @@ class TestOrderTablesByDependency:
 
     def test_order_no_dependencies(self):
         """Test ordering tables with no dependencies."""
-        tables = [
-            ("dbo", "Config"),
-            ("dbo", "Status"),
-            ("dbo", "Settings")
-        ]
+        tables = [("dbo", "Config"), ("dbo", "Status"), ("dbo", "Settings")]
 
         foreign_keys = []
 
@@ -393,12 +372,7 @@ class TestOrderTablesByDependency:
 
     def test_order_complex_dependency_chain(self):
         """Test ordering tables with complex dependency chain."""
-        tables = [
-            ("dbo", "Level1"),
-            ("dbo", "Level2A"),
-            ("dbo", "Level2B"),
-            ("dbo", "Level3")
-        ]
+        tables = [("dbo", "Level1"), ("dbo", "Level2A"), ("dbo", "Level2B"), ("dbo", "Level3")]
 
         foreign_keys = [
             ForeignKeyInfo(
@@ -410,7 +384,7 @@ class TestOrderTablesByDependency:
                 referenced_table="Level1",
                 referenced_columns=["ID"],
                 delete_action="NO_ACTION",
-                update_action="NO_ACTION"
+                update_action="NO_ACTION",
             ),
             ForeignKeyInfo(
                 constraint_name="FK_Level2B_Level1",
@@ -421,7 +395,7 @@ class TestOrderTablesByDependency:
                 referenced_table="Level1",
                 referenced_columns=["ID"],
                 delete_action="NO_ACTION",
-                update_action="NO_ACTION"
+                update_action="NO_ACTION",
             ),
             ForeignKeyInfo(
                 constraint_name="FK_Level3_Level2A",
@@ -432,7 +406,7 @@ class TestOrderTablesByDependency:
                 referenced_table="Level2A",
                 referenced_columns=["ID"],
                 delete_action="NO_ACTION",
-                update_action="NO_ACTION"
+                update_action="NO_ACTION",
             ),
             ForeignKeyInfo(
                 constraint_name="FK_Level3_Level2B",
@@ -443,8 +417,8 @@ class TestOrderTablesByDependency:
                 referenced_table="Level2B",
                 referenced_columns=["ID"],
                 delete_action="NO_ACTION",
-                update_action="NO_ACTION"
-            )
+                update_action="NO_ACTION",
+            ),
         ]
 
         ordered_tables, deferred_fks = order_tables_by_dependency(tables, foreign_keys)
@@ -474,10 +448,7 @@ class TestOrderTablesByDependency:
 
     def test_order_preserves_table_tuples(self):
         """Test that ordering preserves (schema, table) tuple format."""
-        tables = [
-            ("MQTT", "ReceiverConfig"),
-            ("MQTT", "Broker")
-        ]
+        tables = [("MQTT", "ReceiverConfig"), ("MQTT", "Broker")]
 
         foreign_keys = [
             ForeignKeyInfo(
@@ -489,7 +460,7 @@ class TestOrderTablesByDependency:
                 referenced_table="Broker",
                 referenced_columns=["BrokerID"],
                 delete_action="CASCADE",
-                update_action="NO_ACTION"
+                update_action="NO_ACTION",
             )
         ]
 

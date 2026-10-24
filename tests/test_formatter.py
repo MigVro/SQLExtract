@@ -36,10 +36,18 @@ class TestSQLFormatter:
         formatter = SQLFormatter("/tmp/test")
 
         seq = {
-            'schema_name': 'dbo', 'sequence_name': 'seq_OrderNumbers', 'data_type': 'bigint',
-            'precision': 19, 'scale': 0, 'start_value': 1, 'increment': 1,
-            'minimum_value': 1, 'maximum_value': 9223372036854775807,
-            'is_cycling': False, 'is_cached': True, 'cache_size': 50
+            "schema_name": "dbo",
+            "sequence_name": "seq_OrderNumbers",
+            "data_type": "bigint",
+            "precision": 19,
+            "scale": 0,
+            "start_value": 1,
+            "increment": 1,
+            "minimum_value": 1,
+            "maximum_value": 9223372036854775807,
+            "is_cycling": False,
+            "is_cached": True,
+            "cache_size": 50,
         }
 
         sql = formatter.format_sequence(seq)
@@ -56,10 +64,18 @@ class TestSQLFormatter:
         formatter = SQLFormatter("/tmp/test")
 
         seq = {
-            'schema_name': 'dbo', 'sequence_name': 'seq_SmallCounter', 'data_type': 'int',
-            'precision': 10, 'scale': 0, 'start_value': 1, 'increment': 1,
-            'minimum_value': 1, 'maximum_value': 100,
-            'is_cycling': True, 'is_cached': False, 'cache_size': None
+            "schema_name": "dbo",
+            "sequence_name": "seq_SmallCounter",
+            "data_type": "int",
+            "precision": 10,
+            "scale": 0,
+            "start_value": 1,
+            "increment": 1,
+            "minimum_value": 1,
+            "maximum_value": 100,
+            "is_cycling": True,
+            "is_cached": False,
+            "cache_size": None,
         }
 
         sql = formatter.format_sequence(seq)
@@ -73,8 +89,8 @@ class TestSQLFormatter:
         formatter = SQLFormatter("/tmp/test")
 
         properties = {
-            'table_description': "Customer orders.",
-            'columns': {"OrderID": "Primary key.", "Notes": None}
+            "table_description": "Customer orders.",
+            "columns": {"OrderID": "Primary key.", "Notes": None},
         }
 
         sql = formatter.format_extended_properties("dbo", "Orders", properties)
@@ -93,10 +109,10 @@ class TestSQLFormatter:
                 "Unknown_YN": "Use this value if no eExact_id can be found",
                 "GeneralLedgerType": "1 = sales; 2 = purchase; 3 = stock",
             }
-            properties = {'table_description': "Article codes", 'columns': columns}
+            properties = {"table_description": "Article codes", "columns": columns}
             reversed_properties = {
-                'table_description': properties['table_description'],
-                'columns': dict(reversed(list(columns.items()))),
+                "table_description": properties["table_description"],
+                "columns": dict(reversed(list(columns.items()))),
             }
 
             sql = formatter.format_extended_properties("dbo", "ArticleExactCode", properties)
@@ -111,7 +127,9 @@ class TestSQLFormatter:
         """Test formatting extended properties for a table with no descriptions."""
         formatter = SQLFormatter("/tmp/test")
 
-        sql = formatter.format_extended_properties("dbo", "Orders", {'table_description': None, 'columns': {}})
+        sql = formatter.format_extended_properties(
+            "dbo", "Orders", {"table_description": None, "columns": {}}
+        )
 
         assert sql == ""
 
@@ -119,7 +137,7 @@ class TestSQLFormatter:
         """Test that single quotes in descriptions are escaped for the SQL string literal."""
         formatter = SQLFormatter("/tmp/test")
 
-        properties = {'table_description': "Customer's orders.", 'columns': {}}
+        properties = {"table_description": "Customer's orders.", "columns": {}}
         sql = formatter.format_extended_properties("dbo", "Orders", properties)
 
         assert "Customer''s orders." in sql
@@ -129,9 +147,14 @@ class TestSQLFormatter:
         formatter = SQLFormatter("/tmp/test")
 
         udt = {
-            'kind': 'alias', 'schema_name': 'dbo', 'type_name': 'PhoneNumber',
-            'base_type': 'varchar', 'max_length': 20, 'precision': None, 'scale': None,
-            'is_nullable': True
+            "kind": "alias",
+            "schema_name": "dbo",
+            "type_name": "PhoneNumber",
+            "base_type": "varchar",
+            "max_length": 20,
+            "precision": None,
+            "scale": None,
+            "is_nullable": True,
         }
 
         sql = formatter.format_user_defined_type(udt)
@@ -144,13 +167,23 @@ class TestSQLFormatter:
         formatter = SQLFormatter("/tmp/test")
 
         col = ColumnInfo(
-            name="ID", data_type="int", max_length=None, precision=None, scale=None,
-            is_nullable=False, is_identity=False, is_computed=False,
-            default_value=None, computed_definition=None
+            name="ID",
+            data_type="int",
+            max_length=None,
+            precision=None,
+            scale=None,
+            is_nullable=False,
+            is_identity=False,
+            is_computed=False,
+            default_value=None,
+            computed_definition=None,
         )
         udt = {
-            'kind': 'table', 'schema_name': 'dbo', 'type_name': 'IdList',
-            'columns': [col], 'primary_key_columns': ['ID']
+            "kind": "table",
+            "schema_name": "dbo",
+            "type_name": "IdList",
+            "columns": [col],
+            "primary_key_columns": ["ID"],
         }
 
         sql = formatter.format_user_defined_type(udt)
@@ -164,8 +197,11 @@ class TestSQLFormatter:
         formatter = SQLFormatter("/tmp/test")
 
         udt = {
-            'kind': 'clr', 'schema_name': 'dbo', 'type_name': 'GeoPoint',
-            'assembly_name': 'SpatialTypes', 'class_name': 'SpatialTypes.GeoPoint'
+            "kind": "clr",
+            "schema_name": "dbo",
+            "type_name": "GeoPoint",
+            "assembly_name": "SpatialTypes",
+            "class_name": "SpatialTypes.GeoPoint",
         }
 
         sql = formatter.format_user_defined_type(udt)
@@ -179,9 +215,13 @@ class TestSQLFormatter:
         formatter = SQLFormatter("/tmp/test")
 
         func = {
-            'kind': 'clr', 'schema_name': 'dbo', 'function_name': 'fn_GeoDistance',
-            'function_type': 'CLR_SCALAR_FUNCTION', 'assembly_name': 'SpatialTypes',
-            'class_name': 'SpatialTypes.GeoFunctions', 'method_name': 'Distance'
+            "kind": "clr",
+            "schema_name": "dbo",
+            "function_name": "fn_GeoDistance",
+            "function_type": "CLR_SCALAR_FUNCTION",
+            "assembly_name": "SpatialTypes",
+            "class_name": "SpatialTypes.GeoFunctions",
+            "method_name": "Distance",
         }
 
         sql = formatter.format_function(func)
@@ -196,8 +236,11 @@ class TestSQLFormatter:
         formatter = SQLFormatter("/tmp/test")
 
         func = {
-            'kind': 'sql', 'schema_name': 'dbo', 'function_name': 'fn_Test',
-            'function_type': 'SQL_SCALAR_FUNCTION', 'definition': 'CREATE FUNCTION dbo.fn_Test() RETURNS int AS ...'
+            "kind": "sql",
+            "schema_name": "dbo",
+            "function_name": "fn_Test",
+            "function_type": "SQL_SCALAR_FUNCTION",
+            "definition": "CREATE FUNCTION dbo.fn_Test() RETURNS int AS ...",
         }
 
         sql = formatter.format_function(func)
@@ -219,7 +262,7 @@ class TestSQLFormatter:
             is_identity=True,
             is_computed=False,
             default_value=None,
-            computed_definition=None
+            computed_definition=None,
         )
 
         col2 = ColumnInfo(
@@ -232,14 +275,10 @@ class TestSQLFormatter:
             is_identity=False,
             is_computed=False,
             default_value=None,
-            computed_definition=None
+            computed_definition=None,
         )
 
-        table = TableInfo(
-            schema_name="dbo",
-            table_name="Config",
-            columns=[col1, col2]
-        )
+        table = TableInfo(schema_name="dbo", table_name="Config", columns=[col1, col2])
 
         sql = formatter.format_table(table)
 
@@ -255,8 +294,9 @@ class TestSQLFormatter:
         formatter = SQLFormatter("/tmp/test")
 
         view = {
-            'schema_name': 'MQTT', 'view_name': 'vwActiveReceivers',
-            'definition': "-- Create view\nCREATE VIEW MQTT.vwActiveReceivers\nAS\nSELECT 1"
+            "schema_name": "MQTT",
+            "view_name": "vwActiveReceivers",
+            "definition": "-- Create view\nCREATE VIEW MQTT.vwActiveReceivers\nAS\nSELECT 1",
         }
 
         sql = formatter.format_view(view)
@@ -268,24 +308,48 @@ class TestSQLFormatter:
         formatter = SQLFormatter("/tmp/test")
 
         base_col = ColumnInfo(
-            name="SubTotal", data_type="decimal", max_length=None, precision=18, scale=2,
-            is_nullable=False, is_identity=False, is_computed=False,
-            default_value=None, computed_definition=None
+            name="SubTotal",
+            data_type="decimal",
+            max_length=None,
+            precision=18,
+            scale=2,
+            is_nullable=False,
+            is_identity=False,
+            is_computed=False,
+            default_value=None,
+            computed_definition=None,
         )
         persisted_col = ColumnInfo(
-            name="TaxAmount", data_type="decimal", max_length=None, precision=24, scale=6,
-            is_nullable=True, is_identity=False, is_computed=True,
-            default_value=None, computed_definition="([SubTotal]*[TaxRate])", is_persisted=True
+            name="TaxAmount",
+            data_type="decimal",
+            max_length=None,
+            precision=24,
+            scale=6,
+            is_nullable=True,
+            is_identity=False,
+            is_computed=True,
+            default_value=None,
+            computed_definition="([SubTotal]*[TaxRate])",
+            is_persisted=True,
         )
         non_persisted_col = ColumnInfo(
-            name="TotalAmount", data_type="decimal", max_length=None, precision=25, scale=6,
-            is_nullable=True, is_identity=False, is_computed=True,
-            default_value=None, computed_definition="([SubTotal]*((1)+[TaxRate]))", is_persisted=False
+            name="TotalAmount",
+            data_type="decimal",
+            max_length=None,
+            precision=25,
+            scale=6,
+            is_nullable=True,
+            is_identity=False,
+            is_computed=True,
+            default_value=None,
+            computed_definition="([SubTotal]*((1)+[TaxRate]))",
+            is_persisted=False,
         )
 
         table = TableInfo(
-            schema_name="dbo", table_name="Orders",
-            columns=[base_col, persisted_col, non_persisted_col]
+            schema_name="dbo",
+            table_name="Orders",
+            columns=[base_col, persisted_col, non_persisted_col],
         )
 
         sql = formatter.format_table(table)
@@ -305,7 +369,7 @@ class TestSQLFormatter:
             schema_name="dbo",
             table_name="Config",
             columns=["ConfigID"],
-            is_clustered=True
+            is_clustered=True,
         )
 
         sql = formatter.format_primary_key(pk)
@@ -327,7 +391,7 @@ class TestSQLFormatter:
             referenced_table="Broker",
             referenced_columns=["BrokerID"],
             delete_action="CASCADE",
-            update_action="NO_ACTION"
+            update_action="NO_ACTION",
         )
 
         sql = formatter.format_foreign_key(fk)
@@ -342,13 +406,13 @@ class TestSQLFormatter:
         formatter = SQLFormatter("/tmp/test")
 
         trigger = {
-            'schema_name': 'dbo',
-            'table_name': 'Orders',
-            'trigger_name': 'trg_Orders_Audit',
-            'is_instead_of': False,
-            'is_disabled': False,
-            'events': ['INSERT', 'UPDATE'],
-            'definition': 'CREATE TRIGGER dbo.trg_Orders_Audit ON dbo.Orders AFTER INSERT, UPDATE AS ...'
+            "schema_name": "dbo",
+            "table_name": "Orders",
+            "trigger_name": "trg_Orders_Audit",
+            "is_instead_of": False,
+            "is_disabled": False,
+            "events": ["INSERT", "UPDATE"],
+            "definition": "CREATE TRIGGER dbo.trg_Orders_Audit ON dbo.Orders AFTER INSERT, UPDATE AS ...",
         }
 
         sql = formatter.format_trigger(trigger)
@@ -361,13 +425,13 @@ class TestSQLFormatter:
         formatter = SQLFormatter("/tmp/test")
 
         trigger = {
-            'schema_name': 'dbo',
-            'table_name': 'Orders',
-            'trigger_name': 'trg_Orders_Audit',
-            'is_instead_of': False,
-            'is_disabled': True,
-            'events': ['DELETE'],
-            'definition': 'CREATE TRIGGER dbo.trg_Orders_Audit ON dbo.Orders AFTER DELETE AS ...'
+            "schema_name": "dbo",
+            "table_name": "Orders",
+            "trigger_name": "trg_Orders_Audit",
+            "is_instead_of": False,
+            "is_disabled": True,
+            "events": ["DELETE"],
+            "definition": "CREATE TRIGGER dbo.trg_Orders_Audit ON dbo.Orders AFTER DELETE AS ...",
         }
 
         sql = formatter.format_trigger(trigger)
@@ -382,34 +446,52 @@ class TestSQLFormatter:
             formatter = SQLFormatter(tmpdir)
 
             col = ColumnInfo(
-                name="ID", data_type="int", max_length=None, precision=None, scale=None,
-                is_nullable=False, is_identity=True, is_computed=False,
-                default_value=None, computed_definition=None
+                name="ID",
+                data_type="int",
+                max_length=None,
+                precision=None,
+                scale=None,
+                is_nullable=False,
+                is_identity=True,
+                is_computed=False,
+                default_value=None,
+                computed_definition=None,
             )
             table = TableInfo(schema_name="dbo", table_name="Config", columns=[col])
 
             formatter.write_modular_format(
-                schemas=[], user_defined_types=[], sequences=[], tables=[table], extended_properties={},
-                primary_keys=[], foreign_keys=[],
-                deferred_foreign_keys=[], unique_constraints=[], check_constraints=[],
-                indexes=[], views=[], procedures=[], functions=[], triggers=[],
-                seed_data=[]
+                schemas=[],
+                user_defined_types=[],
+                sequences=[],
+                tables=[table],
+                extended_properties={},
+                primary_keys=[],
+                foreign_keys=[],
+                deferred_foreign_keys=[],
+                unique_constraints=[],
+                check_constraints=[],
+                indexes=[],
+                views=[],
+                procedures=[],
+                functions=[],
+                triggers=[],
+                seed_data=[],
             )
 
             # Only tables were provided, so only 04_CREATE_TABLES.sql should exist
             # and be the only entry in the deploy scripts.
-            assert os.path.exists(os.path.join(tmpdir, '04_CREATE_TABLES.sql'))
-            assert not os.path.exists(os.path.join(tmpdir, '01_CREATE_SCHEMAS.sql'))
+            assert os.path.exists(os.path.join(tmpdir, "04_CREATE_TABLES.sql"))
+            assert not os.path.exists(os.path.join(tmpdir, "01_CREATE_SCHEMAS.sql"))
 
-            sh_content = Path(tmpdir, 'deploy.sh').read_text(encoding='utf-8')
-            assert '04_CREATE_TABLES.sql' in sh_content
-            assert '01_CREATE_SCHEMAS.sql' not in sh_content
-            assert 'sqlcmd' in sh_content
+            sh_content = Path(tmpdir, "deploy.sh").read_text(encoding="utf-8")
+            assert "04_CREATE_TABLES.sql" in sh_content
+            assert "01_CREATE_SCHEMAS.sql" not in sh_content
+            assert "sqlcmd" in sh_content
 
-            ps1_content = Path(tmpdir, 'deploy.ps1').read_text(encoding='utf-8')
-            assert '04_CREATE_TABLES.sql' in ps1_content
-            assert '01_CREATE_SCHEMAS.sql' not in ps1_content
-            assert 'sqlcmd' in ps1_content
+            ps1_content = Path(tmpdir, "deploy.ps1").read_text(encoding="utf-8")
+            assert "04_CREATE_TABLES.sql" in ps1_content
+            assert "01_CREATE_SCHEMAS.sql" not in ps1_content
+            assert "sqlcmd" in ps1_content
 
     def test_write_modular_format_writes_types_file(self):
         """Test that user-defined types are written to their own numbered modular file."""
@@ -417,25 +499,41 @@ class TestSQLFormatter:
             formatter = SQLFormatter(tmpdir)
 
             udt = {
-                'kind': 'alias', 'schema_name': 'dbo', 'type_name': 'PhoneNumber',
-                'base_type': 'varchar', 'max_length': 20, 'precision': None, 'scale': None,
-                'is_nullable': True
+                "kind": "alias",
+                "schema_name": "dbo",
+                "type_name": "PhoneNumber",
+                "base_type": "varchar",
+                "max_length": 20,
+                "precision": None,
+                "scale": None,
+                "is_nullable": True,
             }
 
             formatter.write_modular_format(
-                schemas=[], user_defined_types=[udt], sequences=[], tables=[], extended_properties={},
-                primary_keys=[], foreign_keys=[],
-                deferred_foreign_keys=[], unique_constraints=[], check_constraints=[],
-                indexes=[], views=[], procedures=[], functions=[], triggers=[],
-                seed_data=[]
+                schemas=[],
+                user_defined_types=[udt],
+                sequences=[],
+                tables=[],
+                extended_properties={},
+                primary_keys=[],
+                foreign_keys=[],
+                deferred_foreign_keys=[],
+                unique_constraints=[],
+                check_constraints=[],
+                indexes=[],
+                views=[],
+                procedures=[],
+                functions=[],
+                triggers=[],
+                seed_data=[],
             )
 
-            assert os.path.exists(os.path.join(tmpdir, '02_CREATE_TYPES.sql'))
-            content = Path(tmpdir, '02_CREATE_TYPES.sql').read_text(encoding='utf-8')
+            assert os.path.exists(os.path.join(tmpdir, "02_CREATE_TYPES.sql"))
+            content = Path(tmpdir, "02_CREATE_TYPES.sql").read_text(encoding="utf-8")
             assert "CREATE TYPE [dbo].[PhoneNumber]" in content
 
-            sh_content = Path(tmpdir, 'deploy.sh').read_text(encoding='utf-8')
-            assert '02_CREATE_TYPES.sql' in sh_content
+            sh_content = Path(tmpdir, "deploy.sh").read_text(encoding="utf-8")
+            assert "02_CREATE_TYPES.sql" in sh_content
 
     def test_write_modular_format_includes_extended_properties(self):
         """Test that table/column descriptions are written into the tables file."""
@@ -443,24 +541,45 @@ class TestSQLFormatter:
             formatter = SQLFormatter(tmpdir)
 
             col = ColumnInfo(
-                name="ID", data_type="int", max_length=None, precision=None, scale=None,
-                is_nullable=False, is_identity=True, is_computed=False,
-                default_value=None, computed_definition=None
+                name="ID",
+                data_type="int",
+                max_length=None,
+                precision=None,
+                scale=None,
+                is_nullable=False,
+                is_identity=True,
+                is_computed=False,
+                default_value=None,
+                computed_definition=None,
             )
             table = TableInfo(schema_name="dbo", table_name="Config", columns=[col])
             extended_properties = {
-                ("dbo", "Config"): {'table_description': "App configuration.", 'columns': {"ID": "Row identifier."}}
+                ("dbo", "Config"): {
+                    "table_description": "App configuration.",
+                    "columns": {"ID": "Row identifier."},
+                }
             }
 
             formatter.write_modular_format(
-                schemas=[], user_defined_types=[], sequences=[], tables=[table], extended_properties=extended_properties,
-                primary_keys=[], foreign_keys=[],
-                deferred_foreign_keys=[], unique_constraints=[], check_constraints=[],
-                indexes=[], views=[], procedures=[], functions=[], triggers=[],
-                seed_data=[]
+                schemas=[],
+                user_defined_types=[],
+                sequences=[],
+                tables=[table],
+                extended_properties=extended_properties,
+                primary_keys=[],
+                foreign_keys=[],
+                deferred_foreign_keys=[],
+                unique_constraints=[],
+                check_constraints=[],
+                indexes=[],
+                views=[],
+                procedures=[],
+                functions=[],
+                triggers=[],
+                seed_data=[],
             )
 
-            content = Path(tmpdir, '04_CREATE_TABLES.sql').read_text(encoding='utf-8')
+            content = Path(tmpdir, "04_CREATE_TABLES.sql").read_text(encoding="utf-8")
             assert "sp_addextendedproperty" in content
             assert "App configuration." in content
             assert "Row identifier." in content
@@ -471,21 +590,37 @@ class TestSQLFormatter:
             formatter = SQLFormatter(tmpdir)
 
             col = ColumnInfo(
-                name="ID", data_type="int", max_length=None, precision=None, scale=None,
-                is_nullable=False, is_identity=True, is_computed=False,
-                default_value=None, computed_definition=None
+                name="ID",
+                data_type="int",
+                max_length=None,
+                precision=None,
+                scale=None,
+                is_nullable=False,
+                is_identity=True,
+                is_computed=False,
+                default_value=None,
+                computed_definition=None,
             )
             table = TableInfo(schema_name="dbo", table_name="Config", columns=[col])
             view = {"schema_name": "dbo", "view_name": "vwConfig", "definition": "..."}
 
             formatter.write_readme(
-                output_format='modular',
+                output_format="modular",
                 group_by_table=False,
-                schemas=[], user_defined_types=[], sequences=[], tables=[table], views=[view], procedures=[], functions=[],
-                triggers=[], indexes=[], deferred_foreign_keys=[], has_seed_data=True
+                schemas=[],
+                user_defined_types=[],
+                sequences=[],
+                tables=[table],
+                views=[view],
+                procedures=[],
+                functions=[],
+                triggers=[],
+                indexes=[],
+                deferred_foreign_keys=[],
+                has_seed_data=True,
             )
 
-            content = Path(tmpdir, 'README.md').read_text(encoding='utf-8')
+            content = Path(tmpdir, "README.md").read_text(encoding="utf-8")
             assert "dbo.Config" in content
             assert "dbo.vwConfig" in content
             assert "deploy.sh" in content
@@ -498,40 +633,65 @@ class TestSQLFormatter:
             formatter = SQLFormatter(tmpdir)
 
             proc = {
-                'schema_name': 'dbo', 'procedure_name': 'sp_GetUser',
-                'definition': '...',
-                'parameters': [
+                "schema_name": "dbo",
+                "procedure_name": "sp_GetUser",
+                "definition": "...",
+                "parameters": [
                     {
-                        'name': '@UserId', 'data_type': 'int', 'max_length': None,
-                        'precision': None, 'scale': None, 'is_output': False,
-                        'has_default_value': False, 'default_value': None
+                        "name": "@UserId",
+                        "data_type": "int",
+                        "max_length": None,
+                        "precision": None,
+                        "scale": None,
+                        "is_output": False,
+                        "has_default_value": False,
+                        "default_value": None,
                     },
                     {
-                        'name': '@Name', 'data_type': 'nvarchar', 'max_length': 50,
-                        'precision': None, 'scale': None, 'is_output': True,
-                        'has_default_value': True, 'default_value': 'NULL'
-                    }
-                ]
+                        "name": "@Name",
+                        "data_type": "nvarchar",
+                        "max_length": 50,
+                        "precision": None,
+                        "scale": None,
+                        "is_output": True,
+                        "has_default_value": True,
+                        "default_value": "NULL",
+                    },
+                ],
             }
             proc_no_params = {
-                'schema_name': 'dbo', 'procedure_name': 'sp_Cleanup',
-                'definition': '...', 'parameters': []
+                "schema_name": "dbo",
+                "procedure_name": "sp_Cleanup",
+                "definition": "...",
+                "parameters": [],
             }
             clr_func = {
-                'kind': 'clr', 'schema_name': 'dbo', 'function_name': 'fn_GeoDistance',
-                'function_type': 'CLR_SCALAR_FUNCTION', 'assembly_name': 'SpatialTypes',
-                'class_name': 'SpatialTypes.GeoFunctions', 'method_name': 'Distance'
+                "kind": "clr",
+                "schema_name": "dbo",
+                "function_name": "fn_GeoDistance",
+                "function_type": "CLR_SCALAR_FUNCTION",
+                "assembly_name": "SpatialTypes",
+                "class_name": "SpatialTypes.GeoFunctions",
+                "method_name": "Distance",
             }
 
             formatter.write_readme(
-                output_format='modular',
+                output_format="modular",
                 group_by_table=False,
-                schemas=[], user_defined_types=[], sequences=[], tables=[], views=[],
-                procedures=[proc, proc_no_params], functions=[clr_func],
-                triggers=[], indexes=[], deferred_foreign_keys=[], has_seed_data=False
+                schemas=[],
+                user_defined_types=[],
+                sequences=[],
+                tables=[],
+                views=[],
+                procedures=[proc, proc_no_params],
+                functions=[clr_func],
+                triggers=[],
+                indexes=[],
+                deferred_foreign_keys=[],
+                has_seed_data=False,
             )
 
-            content = Path(tmpdir, 'README.md').read_text(encoding='utf-8')
+            content = Path(tmpdir, "README.md").read_text(encoding="utf-8")
             assert "dbo.sp_GetUser(@UserId int, @Name nvarchar(50) = NULL OUTPUT)" in content
             assert "dbo.sp_Cleanup()" in content
             assert "dbo.fn_GeoDistance (CLR)" in content

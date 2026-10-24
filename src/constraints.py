@@ -11,6 +11,7 @@ logger = get_logger(__name__)
 @dataclass
 class PrimaryKeyInfo:
     """Primary key metadata."""
+
     constraint_name: str
     schema_name: str
     table_name: str
@@ -21,6 +22,7 @@ class PrimaryKeyInfo:
 @dataclass
 class ForeignKeyInfo:
     """Foreign key metadata."""
+
     constraint_name: str
     schema_name: str
     table_name: str
@@ -35,6 +37,7 @@ class ForeignKeyInfo:
 @dataclass
 class UniqueConstraintInfo:
     """Unique constraint metadata."""
+
     constraint_name: str
     schema_name: str
     table_name: str
@@ -44,6 +47,7 @@ class UniqueConstraintInfo:
 @dataclass
 class CheckConstraintInfo:
     """Check constraint metadata."""
+
     constraint_name: str
     schema_name: str
     table_name: str
@@ -88,7 +92,7 @@ class ConstraintExtractor:
         """
 
         if schema_filter:
-            placeholders = ','.join(['?' for _ in schema_filter])
+            placeholders = ",".join(["?" for _ in schema_filter])
             query += f" AND s.name IN ({placeholders})"
             query += " ORDER BY s.name, t.name, ic.key_ordinal"
             results = self.connection.fetch_all(query, tuple(schema_filter))
@@ -102,21 +106,21 @@ class ConstraintExtractor:
             key = (row.constraint_name, row.schema_name, row.table_name)
             if key not in pk_dict:
                 pk_dict[key] = {
-                    'constraint_name': row.constraint_name,
-                    'schema_name': row.schema_name,
-                    'table_name': row.table_name,
-                    'is_clustered': row.index_type == 'CLUSTERED',
-                    'columns': []
+                    "constraint_name": row.constraint_name,
+                    "schema_name": row.schema_name,
+                    "table_name": row.table_name,
+                    "is_clustered": row.index_type == "CLUSTERED",
+                    "columns": [],
                 }
-            pk_dict[key]['columns'].append(row.column_name)
+            pk_dict[key]["columns"].append(row.column_name)
 
         pks = [
             PrimaryKeyInfo(
-                constraint_name=v['constraint_name'],
-                schema_name=v['schema_name'],
-                table_name=v['table_name'],
-                columns=v['columns'],
-                is_clustered=v['is_clustered']
+                constraint_name=v["constraint_name"],
+                schema_name=v["schema_name"],
+                table_name=v["table_name"],
+                columns=v["columns"],
+                is_clustered=v["is_clustered"],
             )
             for v in pk_dict.values()
         ]
@@ -154,7 +158,7 @@ class ConstraintExtractor:
         """
 
         if schema_filter:
-            placeholders = ','.join(['?' for _ in schema_filter])
+            placeholders = ",".join(["?" for _ in schema_filter])
             query += f" WHERE s.name IN ({placeholders})"
             query += " ORDER BY s.name, t.name, fk.name, fkc.constraint_column_id"
             results = self.connection.fetch_all(query, tuple(schema_filter))
@@ -168,30 +172,30 @@ class ConstraintExtractor:
             key = (row.constraint_name, row.schema_name, row.table_name)
             if key not in fk_dict:
                 fk_dict[key] = {
-                    'constraint_name': row.constraint_name,
-                    'schema_name': row.schema_name,
-                    'table_name': row.table_name,
-                    'referenced_schema': row.referenced_schema,
-                    'referenced_table': row.referenced_table,
-                    'delete_action': row.delete_action,
-                    'update_action': row.update_action,
-                    'columns': [],
-                    'referenced_columns': []
+                    "constraint_name": row.constraint_name,
+                    "schema_name": row.schema_name,
+                    "table_name": row.table_name,
+                    "referenced_schema": row.referenced_schema,
+                    "referenced_table": row.referenced_table,
+                    "delete_action": row.delete_action,
+                    "update_action": row.update_action,
+                    "columns": [],
+                    "referenced_columns": [],
                 }
-            fk_dict[key]['columns'].append(row.column_name)
-            fk_dict[key]['referenced_columns'].append(row.referenced_column)
+            fk_dict[key]["columns"].append(row.column_name)
+            fk_dict[key]["referenced_columns"].append(row.referenced_column)
 
         fks = [
             ForeignKeyInfo(
-                constraint_name=v['constraint_name'],
-                schema_name=v['schema_name'],
-                table_name=v['table_name'],
-                columns=v['columns'],
-                referenced_schema=v['referenced_schema'],
-                referenced_table=v['referenced_table'],
-                referenced_columns=v['referenced_columns'],
-                delete_action=v['delete_action'],
-                update_action=v['update_action']
+                constraint_name=v["constraint_name"],
+                schema_name=v["schema_name"],
+                table_name=v["table_name"],
+                columns=v["columns"],
+                referenced_schema=v["referenced_schema"],
+                referenced_table=v["referenced_table"],
+                referenced_columns=v["referenced_columns"],
+                delete_action=v["delete_action"],
+                update_action=v["update_action"],
             )
             for v in fk_dict.values()
         ]
@@ -199,7 +203,9 @@ class ConstraintExtractor:
         logger.info(f"Found {len(fks)} foreign keys")
         return fks
 
-    def get_unique_constraints(self, schema_filter: Optional[List[str]] = None) -> List[UniqueConstraintInfo]:
+    def get_unique_constraints(
+        self, schema_filter: Optional[List[str]] = None
+    ) -> List[UniqueConstraintInfo]:
         """Get all unique constraints.
 
         Args:
@@ -224,7 +230,7 @@ class ConstraintExtractor:
         """
 
         if schema_filter:
-            placeholders = ','.join(['?' for _ in schema_filter])
+            placeholders = ",".join(["?" for _ in schema_filter])
             query += f" AND s.name IN ({placeholders})"
             query += " ORDER BY s.name, t.name, ic.key_ordinal"
             results = self.connection.fetch_all(query, tuple(schema_filter))
@@ -238,19 +244,19 @@ class ConstraintExtractor:
             key = (row.constraint_name, row.schema_name, row.table_name)
             if key not in uq_dict:
                 uq_dict[key] = {
-                    'constraint_name': row.constraint_name,
-                    'schema_name': row.schema_name,
-                    'table_name': row.table_name,
-                    'columns': []
+                    "constraint_name": row.constraint_name,
+                    "schema_name": row.schema_name,
+                    "table_name": row.table_name,
+                    "columns": [],
                 }
-            uq_dict[key]['columns'].append(row.column_name)
+            uq_dict[key]["columns"].append(row.column_name)
 
         uqs = [
             UniqueConstraintInfo(
-                constraint_name=v['constraint_name'],
-                schema_name=v['schema_name'],
-                table_name=v['table_name'],
-                columns=v['columns']
+                constraint_name=v["constraint_name"],
+                schema_name=v["schema_name"],
+                table_name=v["table_name"],
+                columns=v["columns"],
             )
             for v in uq_dict.values()
         ]
@@ -258,7 +264,9 @@ class ConstraintExtractor:
         logger.info(f"Found {len(uqs)} unique constraints")
         return uqs
 
-    def get_check_constraints(self, schema_filter: Optional[List[str]] = None) -> List[CheckConstraintInfo]:
+    def get_check_constraints(
+        self, schema_filter: Optional[List[str]] = None
+    ) -> List[CheckConstraintInfo]:
         """Get all check constraints.
 
         Args:
@@ -280,7 +288,7 @@ class ConstraintExtractor:
         """
 
         if schema_filter:
-            placeholders = ','.join(['?' for _ in schema_filter])
+            placeholders = ",".join(["?" for _ in schema_filter])
             query += f" WHERE s.name IN ({placeholders})"
             query += " ORDER BY s.name, t.name"
             results = self.connection.fetch_all(query, tuple(schema_filter))
@@ -294,7 +302,7 @@ class ConstraintExtractor:
                 schema_name=row.schema_name,
                 table_name=row.table_name,
                 definition=row.definition,
-                is_disabled=row.is_disabled
+                is_disabled=row.is_disabled,
             )
             for row in results
         ]

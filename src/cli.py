@@ -19,29 +19,52 @@ logger = get_logger(__name__)
 
 
 @click.command()
-@click.option('--server', '-s', required=True, help='SQL Server hostname or IP')
-@click.option('--port', '-p', default=1433, help='SQL Server port (default: 1433)')
-@click.option('--database', '-d', required=True, help='Database name')
-@click.option('--user', '-u', help='Username (if not using Windows Auth)')
-@click.option('--password', '-P', help='Password')
-@click.option('--windows-auth', '-w', is_flag=True, help='Use Windows Authentication')
-@click.option('--trust-cert', is_flag=True, help='Trust server certificate (for Azure SQL)')
-@click.option('--output', '-o', default='./output', help='Output directory (default: ./output)')
-@click.option('--format', 'output_format', type=click.Choice(['single', 'per-object', 'per-object-cons', 'modular']), default='modular', help="Output format: single, per-object, per-object-cons (per-object but bundles each table's primary key, unique/check constraints, indexes, and triggers into its Tables/ file, like SSMS 'Script Table as CREATE To'; foreign keys stay separate to avoid order-dependent deploys), or modular (default: modular)")
-@click.option('--clean', is_flag=True, help='Delete the output directory before extraction')
-@click.option('--dry-run', is_flag=True, help='Connect and report what would be extracted, without writing any output files')
-@click.option('--omit-ts', is_flag=True, help='Omit the generation timestamp from output headers')
-@click.option('--no-header', is_flag=True, help='Omit the header comment block from output files entirely')
-@click.option('--schemas', help='Comma-separated list of schemas to extract')
-@click.option('--seed-data', is_flag=True, help='Extract seed data from tables')
-@click.option('--tables', help='Comma-separated list of tables for seed data (format: schema.table)')
-@click.option('--max-rows', type=int, help='Maximum rows per table for seed data')
-@click.option('--no-parallel', is_flag=True, help='Disable parallel extraction (use a single database connection)')
-@click.option('--max-workers', type=int, default=8, help='Maximum concurrent database connections when running in parallel (default: 8)')
-@click.option('--verbose', '-v', is_flag=True, help='Verbose logging')
-@click.option('--quiet', '-q', is_flag=True, help='Quiet mode (errors only)')
-@click.option('--log-file', help='Log to file')
-@click.version_option(version='1.0.0')
+@click.option("--server", "-s", required=True, help="SQL Server hostname or IP")
+@click.option("--port", "-p", default=1433, help="SQL Server port (default: 1433)")
+@click.option("--database", "-d", required=True, help="Database name")
+@click.option("--user", "-u", help="Username (if not using Windows Auth)")
+@click.option("--password", "-P", help="Password")
+@click.option("--windows-auth", "-w", is_flag=True, help="Use Windows Authentication")
+@click.option("--trust-cert", is_flag=True, help="Trust server certificate (for Azure SQL)")
+@click.option("--output", "-o", default="./output", help="Output directory (default: ./output)")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["single", "per-object", "per-object-cons", "modular"]),
+    default="modular",
+    help="Output format: single, per-object, per-object-cons (per-object but bundles each table's primary key, unique/check constraints, indexes, and triggers into its Tables/ file, like SSMS 'Script Table as CREATE To'; foreign keys stay separate to avoid order-dependent deploys), or modular (default: modular)",
+)
+@click.option("--clean", is_flag=True, help="Delete the output directory before extraction")
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Connect and report what would be extracted, without writing any output files",
+)
+@click.option("--omit-ts", is_flag=True, help="Omit the generation timestamp from output headers")
+@click.option(
+    "--no-header", is_flag=True, help="Omit the header comment block from output files entirely"
+)
+@click.option("--schemas", help="Comma-separated list of schemas to extract")
+@click.option("--seed-data", is_flag=True, help="Extract seed data from tables")
+@click.option(
+    "--tables", help="Comma-separated list of tables for seed data (format: schema.table)"
+)
+@click.option("--max-rows", type=int, help="Maximum rows per table for seed data")
+@click.option(
+    "--no-parallel",
+    is_flag=True,
+    help="Disable parallel extraction (use a single database connection)",
+)
+@click.option(
+    "--max-workers",
+    type=int,
+    default=8,
+    help="Maximum concurrent database connections when running in parallel (default: 8)",
+)
+@click.option("--verbose", "-v", is_flag=True, help="Verbose logging")
+@click.option("--quiet", "-q", is_flag=True, help="Quiet mode (errors only)")
+@click.option("--log-file", help="Log to file")
+@click.version_option(version="1.0.0")
 def _run(
     server: str,
     port: int,
@@ -64,7 +87,7 @@ def _run(
     max_workers: int,
     verbose: bool,
     quiet: bool,
-    log_file: str
+    log_file: str,
 ):
     """SQL Extract - Universal SQL Server schema extractor.
 
@@ -102,7 +125,10 @@ def _run(
     try:
         # Validate arguments
         if not windows_auth and (not user or not password):
-            click.echo("Error: --user and --password required when not using Windows Authentication", err=True)
+            click.echo(
+                "Error: --user and --password required when not using Windows Authentication",
+                err=True,
+            )
             sys.exit(5)
 
         if not (1 <= port <= 65535):
@@ -120,12 +146,12 @@ def _run(
         # Parse schema filter
         schema_filter = None
         if schemas:
-            schema_filter = [s.strip() for s in schemas.split(',')]
+            schema_filter = [s.strip() for s in schemas.split(",")]
 
         # Parse seed tables
         seed_tables = None
         if tables:
-            seed_tables = [t.strip() for t in tables.split(',')]
+            seed_tables = [t.strip() for t in tables.split(",")]
 
         # Create connection config
         config = ConnectionConfig(
@@ -135,7 +161,7 @@ def _run(
             user=user,
             password=password,
             windows_auth=windows_auth,
-            trust_cert=trust_cert
+            trust_cert=trust_cert,
         )
 
         # Create extractor and run
@@ -153,7 +179,7 @@ def _run(
             parallel=not no_parallel,
             max_workers=max_workers,
             show_progress=not quiet,
-            dry_run=dry_run
+            dry_run=dry_run,
         )
 
         if dry_run:
@@ -166,38 +192,54 @@ def _run(
 
     except AuthenticationError as e:
         click.echo(f"\n✗ Authentication Error: {e}", err=True)
-        click.echo("Hint: check --user/--password are correct, and that SQL Server "
-                    "Authentication is enabled on the server (not Windows-only).", err=True)
+        click.echo(
+            "Hint: check --user/--password are correct, and that SQL Server "
+            "Authentication is enabled on the server (not Windows-only).",
+            err=True,
+        )
         sys.exit(2)
 
     except DatabaseAccessError as e:
         click.echo(f"\n✗ Database Not Found: {e}", err=True)
-        click.echo("Hint: check --database is spelled correctly, and that this login "
-                    "has been granted access to it (SQL Server reports both cases identically).", err=True)
+        click.echo(
+            "Hint: check --database is spelled correctly, and that this login "
+            "has been granted access to it (SQL Server reports both cases identically).",
+            err=True,
+        )
         sys.exit(3)
 
     except PermissionDeniedError as e:
         click.echo(f"\n✗ Permission Denied: {e}", err=True)
-        click.echo("Hint: ask a DBA to grant this login the missing permission on the "
-                    "object named above.", err=True)
+        click.echo(
+            "Hint: ask a DBA to grant this login the missing permission on the "
+            "object named above.",
+            err=True,
+        )
         sys.exit(4)
 
     except ConnError as e:
         click.echo(f"\n✗ Connection Error: {e}", err=True)
-        click.echo("Hint: verify --server/--port are correct, the SQL Server instance "
-                    "accepts remote TCP connections, and no firewall is blocking it.", err=True)
+        click.echo(
+            "Hint: verify --server/--port are correct, the SQL Server instance "
+            "accepts remote TCP connections, and no firewall is blocking it.",
+            err=True,
+        )
         sys.exit(1)
 
     except OutputError as e:
         click.echo(f"\n✗ Output Error: {e}", err=True)
-        click.echo("Hint: check that --output is writable and there is enough disk "
-                    "space, and that no other process has files there open.", err=True)
+        click.echo(
+            "Hint: check that --output is writable and there is enough disk "
+            "space, and that no other process has files there open.",
+            err=True,
+        )
         sys.exit(11)
 
     except SQLExtractError as e:
         click.echo(f"\n✗ Extraction Error: {e}", err=True)
-        click.echo("Hint: rerun with --verbose for the full error, and --log-file to "
-                    "save it.", err=True)
+        click.echo(
+            "Hint: rerun with --verbose for the full error, and --log-file to " "save it.", err=True
+        )
         sys.exit(10)
 
     except ValueError as e:
@@ -207,10 +249,14 @@ def _run(
 
     except Exception as e:
         click.echo(f"\n✗ Unexpected Error: {e}", err=True)
-        click.echo("Hint: rerun with --verbose for a full traceback; this may be a bug "
-                    "worth reporting.", err=True)
+        click.echo(
+            "Hint: rerun with --verbose for a full traceback; this may be a bug "
+            "worth reporting.",
+            err=True,
+        )
         if verbose:
             import traceback
+
             traceback.print_exc()
         sys.exit(99)
 
@@ -229,5 +275,5 @@ def main() -> None:
         sys.exit(e.exit_code)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

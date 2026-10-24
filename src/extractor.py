@@ -36,7 +36,7 @@ class DatabaseExtractor:
         parallel: bool,
         max_workers: int,
         progress: Optional[Progress] = None,
-        task_description: str = "Extracting..."
+        task_description: str = "Extracting...",
     ) -> Dict[str, Any]:
         """Run independent, schema-filtered extraction jobs.
 
@@ -76,7 +76,9 @@ class DatabaseExtractor:
 
         results = {}
         with ThreadPoolExecutor(max_workers=min(max_workers, len(jobs))) as executor:
-            future_to_name = {executor.submit(run_job, name, job): name for name, job in jobs.items()}
+            future_to_name = {
+                executor.submit(run_job, name, job): name for name, job in jobs.items()
+            }
             for future in as_completed(future_to_name):
                 results[future_to_name[future]] = future.result()
                 if progress:
@@ -91,14 +93,14 @@ class DatabaseExtractor:
         extract_seed_data: bool = False,
         seed_tables: Optional[List[str]] = None,
         max_rows: Optional[int] = None,
-        output_format: str = 'modular',
+        output_format: str = "modular",
         clean: bool = False,
         omit_ts: bool = False,
         no_header: bool = False,
         parallel: bool = True,
         max_workers: int = 8,
         show_progress: bool = True,
-        dry_run: bool = False
+        dry_run: bool = False,
     ) -> Optional[Dict[str, int]]:
         """Extract database schema and data.
 
@@ -131,7 +133,12 @@ class DatabaseExtractor:
         formatter = None
         if not dry_run:
             try:
-                formatter = SQLFormatter(output_dir, omit_ts=omit_ts, no_header=no_header, trust_cert=self.config.trust_cert)
+                formatter = SQLFormatter(
+                    output_dir,
+                    omit_ts=omit_ts,
+                    no_header=no_header,
+                    trust_cert=self.config.trust_cert,
+                )
             except OSError as e:
                 logger.error(f"Failed to prepare output directory: {e}")
                 raise OutputError(f"Failed to prepare output directory: {e}")
@@ -151,51 +158,74 @@ class DatabaseExtractor:
                 # column's DEFAULT may reference one via NEXT VALUE FOR; user-defined types
                 # before tables since a column's data type may reference one)
                 metadata_jobs: Dict[str, Callable[[DatabaseConnection], Any]] = {
-                    'schemas': lambda conn: SchemaReader(conn).get_schemas(schema_filter),
-                    'user_defined_types': lambda conn: SchemaReader(conn).get_user_defined_types(schema_filter),
-                    'sequences': lambda conn: SchemaReader(conn).get_sequences(schema_filter),
-                    'tables': lambda conn: SchemaReader(conn).get_tables(schema_filter),
-                    'extended_properties': lambda conn: SchemaReader(conn).get_extended_properties(schema_filter),
-                    'primary_keys': lambda conn: ConstraintExtractor(conn).get_primary_keys(schema_filter),
-                    'foreign_keys': lambda conn: ConstraintExtractor(conn).get_foreign_keys(schema_filter),
-                    'unique_constraints': lambda conn: ConstraintExtractor(conn).get_unique_constraints(schema_filter),
-                    'check_constraints': lambda conn: ConstraintExtractor(conn).get_check_constraints(schema_filter),
-                    'indexes': lambda conn: IndexExtractor(conn).get_indexes(schema_filter),
-                    'views': lambda conn: SchemaReader(conn).get_views(schema_filter),
-                    'view_dependencies': lambda conn: SchemaReader(conn).get_view_dependencies(schema_filter),
-                    'procedures': lambda conn: SchemaReader(conn).get_stored_procedures(schema_filter),
-                    'functions': lambda conn: SchemaReader(conn).get_functions(schema_filter),
-                    'triggers': lambda conn: SchemaReader(conn).get_triggers(schema_filter),
+                    "schemas": lambda conn: SchemaReader(conn).get_schemas(schema_filter),
+                    "user_defined_types": lambda conn: SchemaReader(conn).get_user_defined_types(
+                        schema_filter
+                    ),
+                    "sequences": lambda conn: SchemaReader(conn).get_sequences(schema_filter),
+                    "tables": lambda conn: SchemaReader(conn).get_tables(schema_filter),
+                    "extended_properties": lambda conn: SchemaReader(conn).get_extended_properties(
+                        schema_filter
+                    ),
+                    "primary_keys": lambda conn: ConstraintExtractor(conn).get_primary_keys(
+                        schema_filter
+                    ),
+                    "foreign_keys": lambda conn: ConstraintExtractor(conn).get_foreign_keys(
+                        schema_filter
+                    ),
+                    "unique_constraints": lambda conn: ConstraintExtractor(
+                        conn
+                    ).get_unique_constraints(schema_filter),
+                    "check_constraints": lambda conn: ConstraintExtractor(
+                        conn
+                    ).get_check_constraints(schema_filter),
+                    "indexes": lambda conn: IndexExtractor(conn).get_indexes(schema_filter),
+                    "views": lambda conn: SchemaReader(conn).get_views(schema_filter),
+                    "view_dependencies": lambda conn: SchemaReader(conn).get_view_dependencies(
+                        schema_filter
+                    ),
+                    "procedures": lambda conn: SchemaReader(conn).get_stored_procedures(
+                        schema_filter
+                    ),
+                    "functions": lambda conn: SchemaReader(conn).get_functions(schema_filter),
+                    "triggers": lambda conn: SchemaReader(conn).get_triggers(schema_filter),
                 }
 
-                logger.info(f"Extracting schema metadata ({'parallel' if parallel else 'sequential'}, {len(metadata_jobs)} queries)...")
+                logger.info(
+                    f"Extracting schema metadata ({'parallel' if parallel else 'sequential'}, {len(metadata_jobs)} queries)..."
+                )
                 start = time.monotonic()
                 results = self._run_jobs(
-                    metadata_jobs, parallel=parallel, max_workers=max_workers,
-                    progress=progress, task_description="Extracting metadata"
+                    metadata_jobs,
+                    parallel=parallel,
+                    max_workers=max_workers,
+                    progress=progress,
+                    task_description="Extracting metadata",
                 )
                 logger.info(f"Schema metadata extracted in {time.monotonic() - start:.2f}s")
 
-                schemas = results['schemas']
-                user_defined_types = results['user_defined_types']
-                sequences = results['sequences']
-                tables = results['tables']
-                extended_properties = results['extended_properties']
-                primary_keys = results['primary_keys']
-                foreign_keys = results['foreign_keys']
-                unique_constraints = results['unique_constraints']
-                check_constraints = results['check_constraints']
-                indexes = results['indexes']
-                views = results['views']
-                view_dependencies = results['view_dependencies']
-                procedures = results['procedures']
-                functions = results['functions']
-                triggers = results['triggers']
+                schemas = results["schemas"]
+                user_defined_types = results["user_defined_types"]
+                sequences = results["sequences"]
+                tables = results["tables"]
+                extended_properties = results["extended_properties"]
+                primary_keys = results["primary_keys"]
+                foreign_keys = results["foreign_keys"]
+                unique_constraints = results["unique_constraints"]
+                check_constraints = results["check_constraints"]
+                indexes = results["indexes"]
+                views = results["views"]
+                view_dependencies = results["view_dependencies"]
+                procedures = results["procedures"]
+                functions = results["functions"]
+                triggers = results["triggers"]
 
                 # Order tables by dependency
                 logger.info("Analyzing dependencies...")
                 table_tuples = [(t.schema_name, t.table_name) for t in tables]
-                ordered_table_tuples, deferred_fks = order_tables_by_dependency(table_tuples, foreign_keys)
+                ordered_table_tuples, deferred_fks = order_tables_by_dependency(
+                    table_tuples, foreign_keys
+                )
 
                 # Reorder tables list
                 table_map = {(t.schema_name, t.table_name): t for t in tables}
@@ -214,12 +244,17 @@ class DatabaseExtractor:
                     if seed_tables:
                         # Parse seed_tables list (format: schema.table)
                         for table_spec in seed_tables:
-                            parts = table_spec.split('.')
+                            parts = table_spec.split(".")
                             if len(parts) == 2:
                                 schema_name, table_name = parts
                                 matching_table = next(
-                                    (t for t in ordered_tables if t.schema_name == schema_name and t.table_name == table_name),
-                                    None
+                                    (
+                                        t
+                                        for t in ordered_tables
+                                        if t.schema_name == schema_name
+                                        and t.table_name == table_name
+                                    ),
+                                    None,
                                 )
                                 if matching_table:
                                     data_tables.append(matching_table)
@@ -245,8 +280,11 @@ class DatabaseExtractor:
                             for table in data_tables
                         }
                         seed_results = self._run_jobs(
-                            seed_jobs, parallel=parallel, max_workers=max_workers,
-                            progress=progress, task_description="Extracting seed data"
+                            seed_jobs,
+                            parallel=parallel,
+                            max_workers=max_workers,
+                            progress=progress,
+                            task_description="Extracting seed data",
                         )
 
                         # Reassemble in dependency order (not completion order)
@@ -260,20 +298,20 @@ class DatabaseExtractor:
 
                 if dry_run:
                     summary = {
-                        'schemas': len(schemas),
-                        'user_defined_types': len(user_defined_types),
-                        'sequences': len(sequences),
-                        'tables': len(tables),
-                        'primary_keys': len(primary_keys),
-                        'foreign_keys': len(foreign_keys),
-                        'unique_constraints': len(unique_constraints),
-                        'check_constraints': len(check_constraints),
-                        'indexes': len(indexes),
-                        'views': len(views),
-                        'procedures': len(procedures),
-                        'functions': len(functions),
-                        'triggers': len(triggers),
-                        'seed_data_tables': len(data_tables),
+                        "schemas": len(schemas),
+                        "user_defined_types": len(user_defined_types),
+                        "sequences": len(sequences),
+                        "tables": len(tables),
+                        "primary_keys": len(primary_keys),
+                        "foreign_keys": len(foreign_keys),
+                        "unique_constraints": len(unique_constraints),
+                        "check_constraints": len(check_constraints),
+                        "indexes": len(indexes),
+                        "views": len(views),
+                        "procedures": len(procedures),
+                        "functions": len(functions),
+                        "triggers": len(triggers),
+                        "seed_data_tables": len(data_tables),
                     }
                     logger.info(f"Dry run complete: {summary}")
                     return summary
@@ -295,7 +333,7 @@ class DatabaseExtractor:
                     os.makedirs(output_dir, exist_ok=True)
 
                 logger.info("Generating SQL scripts...")
-                if output_format == 'single':
+                if output_format == "single":
                     formatter.write_single_file(
                         schemas=schemas,
                         user_defined_types=user_defined_types,
@@ -312,9 +350,9 @@ class DatabaseExtractor:
                         procedures=procedures,
                         functions=functions,
                         triggers=triggers,
-                        seed_data=seed_data
+                        seed_data=seed_data,
                     )
-                elif output_format in ('per-object', 'per-object-cons'):
+                elif output_format in ("per-object", "per-object-cons"):
                     formatter.write_per_object_format(
                         schemas=schemas,
                         user_defined_types=user_defined_types,
@@ -332,7 +370,7 @@ class DatabaseExtractor:
                         functions=functions,
                         triggers=triggers,
                         seed_data_by_table=seed_data_by_table,
-                        group_by_table=(output_format == 'per-object-cons')
+                        group_by_table=(output_format == "per-object-cons"),
                     )
                 else:
                     formatter.write_modular_format(
@@ -351,12 +389,12 @@ class DatabaseExtractor:
                         procedures=procedures,
                         functions=functions,
                         triggers=triggers,
-                        seed_data=seed_data
+                        seed_data=seed_data,
                     )
 
                 formatter.write_readme(
                     output_format=output_format,
-                    group_by_table=(output_format == 'per-object-cons'),
+                    group_by_table=(output_format == "per-object-cons"),
                     schemas=schemas,
                     user_defined_types=user_defined_types,
                     sequences=sequences,
@@ -367,7 +405,7 @@ class DatabaseExtractor:
                     triggers=triggers,
                     indexes=indexes,
                     deferred_foreign_keys=deferred_fks,
-                    has_seed_data=bool(seed_data)
+                    has_seed_data=bool(seed_data),
                 )
 
                 logger.info("Extraction complete!")

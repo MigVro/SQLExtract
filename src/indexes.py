@@ -11,6 +11,7 @@ logger = get_logger(__name__)
 @dataclass
 class IndexInfo:
     """Index metadata."""
+
     index_name: str
     schema_name: str
     table_name: str
@@ -66,7 +67,7 @@ class IndexExtractor:
         """
 
         if schema_filter:
-            placeholders = ','.join(['?' for _ in schema_filter])
+            placeholders = ",".join(["?" for _ in schema_filter])
             query += f" AND s.name IN ({placeholders})"
             query += " ORDER BY s.name, t.name, i.name, ic.key_ordinal, ic.index_column_id"
             results = self.connection.fetch_all(query, tuple(schema_filter))
@@ -80,35 +81,35 @@ class IndexExtractor:
             key = (row.index_name, row.schema_name, row.table_name)
             if key not in index_dict:
                 index_dict[key] = {
-                    'index_name': row.index_name,
-                    'schema_name': row.schema_name,
-                    'table_name': row.table_name,
-                    'is_unique': row.is_unique,
-                    'is_clustered': row.index_type == 'CLUSTERED',
-                    'is_primary_key': row.is_primary_key,
-                    'is_unique_constraint': row.is_unique_constraint,
-                    'filter_definition': row.filter_definition,
-                    'columns': [],
-                    'included_columns': []
+                    "index_name": row.index_name,
+                    "schema_name": row.schema_name,
+                    "table_name": row.table_name,
+                    "is_unique": row.is_unique,
+                    "is_clustered": row.index_type == "CLUSTERED",
+                    "is_primary_key": row.is_primary_key,
+                    "is_unique_constraint": row.is_unique_constraint,
+                    "filter_definition": row.filter_definition,
+                    "columns": [],
+                    "included_columns": [],
                 }
 
             if row.is_included_column:
-                index_dict[key]['included_columns'].append(row.column_name)
+                index_dict[key]["included_columns"].append(row.column_name)
             else:
-                index_dict[key]['columns'].append(row.column_name)
+                index_dict[key]["columns"].append(row.column_name)
 
         indexes = [
             IndexInfo(
-                index_name=v['index_name'],
-                schema_name=v['schema_name'],
-                table_name=v['table_name'],
-                is_unique=v['is_unique'],
-                is_clustered=v['is_clustered'],
-                is_primary_key=v['is_primary_key'],
-                is_unique_constraint=v['is_unique_constraint'],
-                columns=v['columns'],
-                included_columns=v['included_columns'],
-                filter_definition=v['filter_definition']
+                index_name=v["index_name"],
+                schema_name=v["schema_name"],
+                table_name=v["table_name"],
+                is_unique=v["is_unique"],
+                is_clustered=v["is_clustered"],
+                is_primary_key=v["is_primary_key"],
+                is_unique_constraint=v["is_unique_constraint"],
+                columns=v["columns"],
+                included_columns=v["included_columns"],
+                filter_definition=v["filter_definition"],
             )
             for v in index_dict.values()
         ]

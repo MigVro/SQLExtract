@@ -11,6 +11,7 @@ logger = get_logger(__name__)
 @dataclass
 class SchemaInfo:
     """Schema metadata."""
+
     name: str
     owner: str = "dbo"
 
@@ -18,6 +19,7 @@ class SchemaInfo:
 @dataclass
 class ColumnInfo:
     """Column metadata."""
+
     name: str
     data_type: str
     max_length: Optional[int]
@@ -34,6 +36,7 @@ class ColumnInfo:
 @dataclass
 class TableInfo:
     """Table metadata."""
+
     schema_name: str
     table_name: str
     columns: List[ColumnInfo]
@@ -71,7 +74,7 @@ class SchemaReader:
         """
 
         if schema_filter:
-            placeholders = ','.join(['?' for _ in schema_filter])
+            placeholders = ",".join(["?" for _ in schema_filter])
             query += f" AND s.name IN ({placeholders})"
             results = self.connection.fetch_all(query, tuple(schema_filter))
         else:
@@ -79,7 +82,7 @@ class SchemaReader:
 
         schemas = []
         for row in results:
-            schemas.append(SchemaInfo(name=row.schema_name, owner=row.owner or 'dbo'))
+            schemas.append(SchemaInfo(name=row.schema_name, owner=row.owner or "dbo"))
 
         logger.info(f"Found {len(schemas)} schemas")
         return schemas
@@ -103,7 +106,7 @@ class SchemaReader:
         """
 
         if schema_filter:
-            placeholders = ','.join(['?' for _ in schema_filter])
+            placeholders = ",".join(["?" for _ in schema_filter])
             query += f" AND s.name IN ({placeholders})"
             results = self.connection.fetch_all(query, tuple(schema_filter))
         else:
@@ -112,11 +115,9 @@ class SchemaReader:
         tables = []
         for row in results:
             columns = self.get_table_columns(row.schema_name, row.table_name)
-            tables.append(TableInfo(
-                schema_name=row.schema_name,
-                table_name=row.table_name,
-                columns=columns
-            ))
+            tables.append(
+                TableInfo(schema_name=row.schema_name, table_name=row.table_name, columns=columns)
+            )
 
         logger.info(f"Found {len(tables)} tables")
         return tables
@@ -159,22 +160,24 @@ class SchemaReader:
         for row in results:
             # Adjust max_length for unicode types
             max_length = row.max_length
-            if row.data_type in ('nvarchar', 'nchar'):
+            if row.data_type in ("nvarchar", "nchar"):
                 max_length = max_length // 2 if max_length > 0 else max_length
 
-            columns.append(ColumnInfo(
-                name=row.column_name,
-                data_type=row.data_type,
-                max_length=max_length,
-                precision=row.precision if row.precision > 0 else None,
-                scale=row.scale if row.scale > 0 else None,
-                is_nullable=row.is_nullable,
-                is_identity=row.is_identity,
-                is_computed=row.is_computed,
-                default_value=row.default_value,
-                computed_definition=row.computed_definition,
-                is_persisted=bool(row.is_persisted)
-            ))
+            columns.append(
+                ColumnInfo(
+                    name=row.column_name,
+                    data_type=row.data_type,
+                    max_length=max_length,
+                    precision=row.precision if row.precision > 0 else None,
+                    scale=row.scale if row.scale > 0 else None,
+                    is_nullable=row.is_nullable,
+                    is_identity=row.is_identity,
+                    is_computed=row.is_computed,
+                    default_value=row.default_value,
+                    computed_definition=row.computed_definition,
+                    is_persisted=bool(row.is_persisted),
+                )
+            )
 
         return columns
 
@@ -207,7 +210,7 @@ class SchemaReader:
         """
 
         if schema_filter:
-            placeholders = ','.join(['?' for _ in schema_filter])
+            placeholders = ",".join(["?" for _ in schema_filter])
             query += f" AND s.name IN ({placeholders})"
             results = self.connection.fetch_all(query, tuple(schema_filter))
         else:
@@ -215,18 +218,18 @@ class SchemaReader:
 
         sequences = [
             {
-                'schema_name': row.schema_name,
-                'sequence_name': row.sequence_name,
-                'data_type': row.data_type,
-                'precision': row.precision,
-                'scale': row.scale,
-                'start_value': row.start_value,
-                'increment': row.increment,
-                'minimum_value': row.minimum_value,
-                'maximum_value': row.maximum_value,
-                'is_cycling': bool(row.is_cycling),
-                'is_cached': bool(row.is_cached),
-                'cache_size': row.cache_size
+                "schema_name": row.schema_name,
+                "sequence_name": row.sequence_name,
+                "data_type": row.data_type,
+                "precision": row.precision,
+                "scale": row.scale,
+                "start_value": row.start_value,
+                "increment": row.increment,
+                "minimum_value": row.minimum_value,
+                "maximum_value": row.maximum_value,
+                "is_cycling": bool(row.is_cycling),
+                "is_cached": bool(row.is_cached),
+                "cache_size": row.cache_size,
             }
             for row in results
         ]
@@ -255,7 +258,7 @@ class SchemaReader:
         """
 
         if schema_filter:
-            placeholders = ','.join(['?' for _ in schema_filter])
+            placeholders = ",".join(["?" for _ in schema_filter])
             query += f" AND s.name IN ({placeholders})"
             results = self.connection.fetch_all(query, tuple(schema_filter))
         else:
@@ -267,16 +270,20 @@ class SchemaReader:
                 logger.warning(f"View {row.schema_name}.{row.view_name} is encrypted - skipping")
                 continue
 
-            views.append({
-                'schema_name': row.schema_name,
-                'view_name': row.view_name,
-                'definition': row.definition.replace('\r\n', '\n')
-            })
+            views.append(
+                {
+                    "schema_name": row.schema_name,
+                    "view_name": row.view_name,
+                    "definition": row.definition.replace("\r\n", "\n"),
+                }
+            )
 
         logger.info(f"Found {len(views)} views")
         return views
 
-    def get_view_dependencies(self, schema_filter: Optional[List[str]] = None) -> List[Tuple[str, str, str, str]]:
+    def get_view_dependencies(
+        self, schema_filter: Optional[List[str]] = None
+    ) -> List[Tuple[str, str, str, str]]:
         """Get view-to-view dependencies (views referenced by other views).
 
         Args:
@@ -300,7 +307,7 @@ class SchemaReader:
         """
 
         if schema_filter:
-            placeholders = ','.join(['?' for _ in schema_filter])
+            placeholders = ",".join(["?" for _ in schema_filter])
             query += f" AND s1.name IN ({placeholders})"
             results = self.connection.fetch_all(query, tuple(schema_filter))
         else:
@@ -343,7 +350,7 @@ class SchemaReader:
         """
 
         if schema_filter:
-            placeholders = ','.join(['?' for _ in schema_filter])
+            placeholders = ",".join(["?" for _ in schema_filter])
             query += f" AND s.name IN ({placeholders})"
             query += " ORDER BY s.name, t.name, tr.name"
             results = self.connection.fetch_all(query, tuple(schema_filter))
@@ -361,28 +368,32 @@ class SchemaReader:
 
             if key not in trigger_dict:
                 if row.definition is None:
-                    logger.warning(f"Trigger {row.schema_name}.{row.table_name}.{row.trigger_name} is encrypted - skipping")
+                    logger.warning(
+                        f"Trigger {row.schema_name}.{row.table_name}.{row.trigger_name} is encrypted - skipping"
+                    )
                     skipped_encrypted.add(key)
                     continue
 
                 trigger_dict[key] = {
-                    'schema_name': row.schema_name,
-                    'table_name': row.table_name,
-                    'trigger_name': row.trigger_name,
-                    'is_instead_of': bool(row.is_instead_of_trigger),
-                    'is_disabled': bool(row.is_disabled),
-                    'events': [],
-                    'definition': row.definition.replace('\r\n', '\n')
+                    "schema_name": row.schema_name,
+                    "table_name": row.table_name,
+                    "trigger_name": row.trigger_name,
+                    "is_instead_of": bool(row.is_instead_of_trigger),
+                    "is_disabled": bool(row.is_disabled),
+                    "events": [],
+                    "definition": row.definition.replace("\r\n", "\n"),
                 }
 
-            if row.event_type not in trigger_dict[key]['events']:
-                trigger_dict[key]['events'].append(row.event_type)
+            if row.event_type not in trigger_dict[key]["events"]:
+                trigger_dict[key]["events"].append(row.event_type)
 
         triggers = list(trigger_dict.values())
         logger.info(f"Found {len(triggers)} triggers")
         return triggers
 
-    def get_extended_properties(self, schema_filter: Optional[List[str]] = None) -> Dict[Tuple[str, str], Dict[str, Any]]:
+    def get_extended_properties(
+        self, schema_filter: Optional[List[str]] = None
+    ) -> Dict[Tuple[str, str], Dict[str, Any]]:
         """Get MS_Description extended properties (descriptions) for tables and columns.
 
         Args:
@@ -407,7 +418,7 @@ class SchemaReader:
         """
 
         if schema_filter:
-            placeholders = ','.join(['?' for _ in schema_filter])
+            placeholders = ",".join(["?" for _ in schema_filter])
             query += f" AND s.name IN ({placeholders})"
             results = self.connection.fetch_all(query, tuple(schema_filter))
         else:
@@ -416,20 +427,21 @@ class SchemaReader:
         properties: Dict[Tuple[str, str], Dict[str, Any]] = {}
         for row in results:
             key = (row.schema_name, row.table_name)
-            entry = properties.setdefault(key, {'table_description': None, 'columns': {}})
+            entry = properties.setdefault(key, {"table_description": None, "columns": {}})
             if row.column_name is None:
-                entry['table_description'] = row.description
+                entry["table_description"] = row.description
             else:
-                entry['columns'][row.column_name] = row.description
+                entry["columns"][row.column_name] = row.description
 
         count = sum(
-            (1 if v['table_description'] else 0) + len(v['columns'])
-            for v in properties.values()
+            (1 if v["table_description"] else 0) + len(v["columns"]) for v in properties.values()
         )
         logger.info(f"Found {count} extended properties (descriptions)")
         return properties
 
-    def get_user_defined_types(self, schema_filter: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+    def get_user_defined_types(
+        self, schema_filter: Optional[List[str]] = None
+    ) -> List[Dict[str, Any]]:
         """Get all user-defined types: alias types, table types, and CLR types (metadata only).
 
         Args:
@@ -465,7 +477,7 @@ class SchemaReader:
         """
 
         if schema_filter:
-            placeholders = ','.join(['?' for _ in schema_filter])
+            placeholders = ",".join(["?" for _ in schema_filter])
             query += f" AND s.name IN ({placeholders})"
             results = self.connection.fetch_all(query, tuple(schema_filter))
         else:
@@ -474,19 +486,21 @@ class SchemaReader:
         alias_types = []
         for row in results:
             max_length = row.max_length
-            if row.base_type in ('nvarchar', 'nchar'):
+            if row.base_type in ("nvarchar", "nchar"):
                 max_length = max_length // 2 if max_length > 0 else max_length
 
-            alias_types.append({
-                'kind': 'alias',
-                'schema_name': row.schema_name,
-                'type_name': row.type_name,
-                'base_type': row.base_type,
-                'max_length': max_length if max_length >= 0 else None,
-                'precision': row.precision if row.precision > 0 else None,
-                'scale': row.scale if row.scale > 0 else None,
-                'is_nullable': bool(row.is_nullable)
-            })
+            alias_types.append(
+                {
+                    "kind": "alias",
+                    "schema_name": row.schema_name,
+                    "type_name": row.type_name,
+                    "base_type": row.base_type,
+                    "max_length": max_length if max_length >= 0 else None,
+                    "precision": row.precision if row.precision > 0 else None,
+                    "scale": row.scale if row.scale > 0 else None,
+                    "is_nullable": bool(row.is_nullable),
+                }
+            )
 
         return alias_types
 
@@ -503,7 +517,7 @@ class SchemaReader:
         """
 
         if schema_filter:
-            placeholders = ','.join(['?' for _ in schema_filter])
+            placeholders = ",".join(["?" for _ in schema_filter])
             query += f" AND s.name IN ({placeholders})"
             results = self.connection.fetch_all(query, tuple(schema_filter))
         else:
@@ -511,13 +525,17 @@ class SchemaReader:
 
         table_types = []
         for row in results:
-            table_types.append({
-                'kind': 'table',
-                'schema_name': row.schema_name,
-                'type_name': row.type_name,
-                'columns': self._get_table_type_columns(row.type_table_object_id),
-                'primary_key_columns': self._get_table_type_primary_key(row.type_table_object_id)
-            })
+            table_types.append(
+                {
+                    "kind": "table",
+                    "schema_name": row.schema_name,
+                    "type_name": row.type_name,
+                    "columns": self._get_table_type_columns(row.type_table_object_id),
+                    "primary_key_columns": self._get_table_type_primary_key(
+                        row.type_table_object_id
+                    ),
+                }
+            )
 
         return table_types
 
@@ -547,21 +565,23 @@ class SchemaReader:
         columns = []
         for row in results:
             max_length = row.max_length
-            if row.data_type in ('nvarchar', 'nchar'):
+            if row.data_type in ("nvarchar", "nchar"):
                 max_length = max_length // 2 if max_length > 0 else max_length
 
-            columns.append(ColumnInfo(
-                name=row.column_name,
-                data_type=row.data_type,
-                max_length=max_length,
-                precision=row.precision if row.precision > 0 else None,
-                scale=row.scale if row.scale > 0 else None,
-                is_nullable=row.is_nullable,
-                is_identity=row.is_identity,
-                is_computed=row.is_computed,
-                default_value=row.default_value,
-                computed_definition=row.computed_definition
-            ))
+            columns.append(
+                ColumnInfo(
+                    name=row.column_name,
+                    data_type=row.data_type,
+                    max_length=max_length,
+                    precision=row.precision if row.precision > 0 else None,
+                    scale=row.scale if row.scale > 0 else None,
+                    is_nullable=row.is_nullable,
+                    is_identity=row.is_identity,
+                    is_computed=row.is_computed,
+                    default_value=row.default_value,
+                    computed_definition=row.computed_definition,
+                )
+            )
 
         return columns
 
@@ -597,7 +617,7 @@ class SchemaReader:
         """
 
         if schema_filter:
-            placeholders = ','.join(['?' for _ in schema_filter])
+            placeholders = ",".join(["?" for _ in schema_filter])
             query += f" AND s.name IN ({placeholders})"
             results = self.connection.fetch_all(query, tuple(schema_filter))
         else:
@@ -605,11 +625,11 @@ class SchemaReader:
 
         return [
             {
-                'kind': 'clr',
-                'schema_name': row.schema_name,
-                'type_name': row.type_name,
-                'assembly_name': row.assembly_name,
-                'class_name': row.class_name
+                "kind": "clr",
+                "schema_name": row.schema_name,
+                "type_name": row.type_name,
+                "assembly_name": row.assembly_name,
+                "class_name": row.class_name,
             }
             for row in results
         ]
@@ -640,23 +660,27 @@ class SchemaReader:
         parameters = []
         for row in results:
             max_length = row.max_length
-            if row.data_type in ('nvarchar', 'nchar'):
+            if row.data_type in ("nvarchar", "nchar"):
                 max_length = max_length // 2 if max_length > 0 else max_length
 
-            parameters.append({
-                'name': row.parameter_name,
-                'data_type': row.data_type,
-                'max_length': max_length,
-                'precision': row.precision if row.precision > 0 else None,
-                'scale': row.scale if row.scale > 0 else None,
-                'is_output': bool(row.is_output),
-                'has_default_value': bool(row.has_default_value),
-                'default_value': row.default_value
-            })
+            parameters.append(
+                {
+                    "name": row.parameter_name,
+                    "data_type": row.data_type,
+                    "max_length": max_length,
+                    "precision": row.precision if row.precision > 0 else None,
+                    "scale": row.scale if row.scale > 0 else None,
+                    "is_output": bool(row.is_output),
+                    "has_default_value": bool(row.has_default_value),
+                    "default_value": row.default_value,
+                }
+            )
 
         return parameters
 
-    def get_stored_procedures(self, schema_filter: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+    def get_stored_procedures(
+        self, schema_filter: Optional[List[str]] = None
+    ) -> List[Dict[str, Any]]:
         """Get all stored procedures from database.
 
         Args:
@@ -682,7 +706,7 @@ class SchemaReader:
         """
 
         if schema_filter:
-            placeholders = ','.join(['?' for _ in schema_filter])
+            placeholders = ",".join(["?" for _ in schema_filter])
             query += f" AND s.name IN ({placeholders})"
             results = self.connection.fetch_all(query, tuple(schema_filter))
         else:
@@ -691,15 +715,19 @@ class SchemaReader:
         procedures = []
         for row in results:
             if row.definition is None:
-                logger.warning(f"Procedure {row.schema_name}.{row.procedure_name} is encrypted - skipping")
+                logger.warning(
+                    f"Procedure {row.schema_name}.{row.procedure_name} is encrypted - skipping"
+                )
                 continue
 
-            procedures.append({
-                'schema_name': row.schema_name,
-                'procedure_name': row.procedure_name,
-                'definition': row.definition.replace('\r\n', '\n'),
-                'parameters': self._get_parameters(row.object_id)
-            })
+            procedures.append(
+                {
+                    "schema_name": row.schema_name,
+                    "procedure_name": row.procedure_name,
+                    "definition": row.definition.replace("\r\n", "\n"),
+                    "parameters": self._get_parameters(row.object_id),
+                }
+            )
 
         logger.info(f"Found {len(procedures)} stored procedures")
         return procedures
@@ -736,7 +764,7 @@ class SchemaReader:
         """
 
         if schema_filter:
-            placeholders = ','.join(['?' for _ in schema_filter])
+            placeholders = ",".join(["?" for _ in schema_filter])
             query += f" AND s.name IN ({placeholders})"
             results = self.connection.fetch_all(query, tuple(schema_filter))
         else:
@@ -745,16 +773,20 @@ class SchemaReader:
         functions = []
         for row in results:
             if row.definition is None:
-                logger.warning(f"Function {row.schema_name}.{row.function_name} is encrypted - skipping")
+                logger.warning(
+                    f"Function {row.schema_name}.{row.function_name} is encrypted - skipping"
+                )
                 continue
 
-            functions.append({
-                'kind': 'sql',
-                'schema_name': row.schema_name,
-                'function_name': row.function_name,
-                'function_type': row.function_type,
-                'definition': row.definition.replace('\r\n', '\n')
-            })
+            functions.append(
+                {
+                    "kind": "sql",
+                    "schema_name": row.schema_name,
+                    "function_name": row.function_name,
+                    "function_type": row.function_type,
+                    "definition": row.definition.replace("\r\n", "\n"),
+                }
+            )
 
         return functions
 
@@ -778,7 +810,7 @@ class SchemaReader:
         """
 
         if schema_filter:
-            placeholders = ','.join(['?' for _ in schema_filter])
+            placeholders = ",".join(["?" for _ in schema_filter])
             query += f" AND s.name IN ({placeholders})"
             results = self.connection.fetch_all(query, tuple(schema_filter))
         else:
@@ -786,13 +818,13 @@ class SchemaReader:
 
         return [
             {
-                'kind': 'clr',
-                'schema_name': row.schema_name,
-                'function_name': row.function_name,
-                'function_type': row.function_type,
-                'assembly_name': row.assembly_name,
-                'class_name': row.class_name,
-                'method_name': row.method_name
+                "kind": "clr",
+                "schema_name": row.schema_name,
+                "function_name": row.function_name,
+                "function_type": row.function_type,
+                "assembly_name": row.assembly_name,
+                "class_name": row.class_name,
+                "method_name": row.method_name,
             }
             for row in results
         ]

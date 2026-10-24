@@ -7,7 +7,7 @@ from src.constraints import (
     PrimaryKeyInfo,
     ForeignKeyInfo,
     UniqueConstraintInfo,
-    CheckConstraintInfo
+    CheckConstraintInfo,
 )
 
 

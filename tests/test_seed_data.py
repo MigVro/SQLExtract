@@ -27,7 +27,7 @@ class TestSeedDataExtractor:
             is_identity=True,
             is_computed=False,
             default_value=None,
-            computed_definition=None
+            computed_definition=None,
         )
 
         col2 = ColumnInfo(
@@ -40,18 +40,14 @@ class TestSeedDataExtractor:
             is_identity=False,
             is_computed=False,
             default_value=None,
-            computed_definition=None
+            computed_definition=None,
         )
 
         # Mock data rows - return as tuple, not object
         mock_db_connection.fetch_all.return_value = [(1, "AppName")]
 
         extractor = SeedDataExtractor(mock_db_connection)
-        statements = extractor.extract_table_data(
-            "dbo",
-            "Config",
-            [col1, col2]
-        )
+        statements = extractor.extract_table_data("dbo", "Config", [col1, col2])
 
         # Should return INSERT statements (with IDENTITY_INSERT wrapper)
         assert len(statements) > 0
@@ -73,7 +69,7 @@ class TestSeedDataExtractor:
             is_identity=False,
             is_computed=False,
             default_value=None,
-            computed_definition=None
+            computed_definition=None,
         )
 
         mock_db_connection.fetch_all.return_value = []
@@ -98,18 +94,13 @@ class TestSeedDataExtractor:
             is_identity=False,
             is_computed=False,
             default_value=None,
-            computed_definition=None
+            computed_definition=None,
         )
 
         mock_db_connection.fetch_all.return_value = []
 
         extractor = SeedDataExtractor(mock_db_connection)
-        extractor.extract_table_data(
-            "dbo",
-            "Config",
-            [col],
-            where_clause="IsEnabled = 1"
-        )
+        extractor.extract_table_data("dbo", "Config", [col], where_clause="IsEnabled = 1")
 
         # Verify WHERE clause was used
         call_args = mock_db_connection.fetch_all.call_args
@@ -128,7 +119,7 @@ class TestSeedDataExtractor:
             is_identity=False,
             is_computed=False,
             default_value=None,
-            computed_definition=None
+            computed_definition=None,
         )
 
         col2 = ColumnInfo(
@@ -141,17 +132,13 @@ class TestSeedDataExtractor:
             is_identity=False,
             is_computed=True,  # Computed column
             default_value=None,
-            computed_definition="([SubTotal]*[TaxRate])"
+            computed_definition="([SubTotal]*[TaxRate])",
         )
 
         mock_db_connection.fetch_all.return_value = [(100.00,)]
 
         extractor = SeedDataExtractor(mock_db_connection)
-        statements = extractor.extract_table_data(
-            "dbo",
-            "Orders",
-            [col1, col2]
-        )
+        statements = extractor.extract_table_data("dbo", "Orders", [col1, col2])
 
         # Should only have SubTotal in INSERT, not Total (computed)
         insert_stmt = [s for s in statements if "INSERT INTO" in s][0]
@@ -172,17 +159,13 @@ class TestSeedDataExtractor:
             is_identity=False,
             is_computed=False,
             default_value=None,
-            computed_definition=None
+            computed_definition=None,
         )
 
         mock_db_connection.fetch_all.return_value = [(None,)]
 
         extractor = SeedDataExtractor(mock_db_connection)
-        statements = extractor.extract_table_data(
-            "dbo",
-            "Config",
-            [col]
-        )
+        statements = extractor.extract_table_data("dbo", "Config", [col])
 
         insert_stmt = [s for s in statements if "INSERT INTO" in s][0]
         assert "NULL" in insert_stmt
@@ -200,7 +183,7 @@ class TestSeedDataExtractor:
             is_identity=False,
             is_computed=False,
             default_value=None,
-            computed_definition=None
+            computed_definition=None,
         )
 
         mock_db_connection.fetch_all.return_value = [(True,), (False,)]

@@ -114,6 +114,7 @@ class TestSchemaReader:
 
         # Setup mock to return different results for different queries
         call_count = [0]
+
         def fetch_all_side_effect(query, params=None):
             call_count[0] += 1
             if call_count[0] == 1:  # First call is for tables
@@ -141,6 +142,7 @@ class TestSchemaReader:
 
         # Mock empty columns
         call_count = [0]
+
         def fetch_all_side_effect(query, params=None):
             call_count[0] += 1
             if call_count[0] == 1:  # First call is for tables
@@ -208,7 +210,10 @@ class TestSchemaReader:
         col_with_default.computed_definition = None
 
         mock_db_connection.fetch_all.return_value = [
-            col_int, col_nvarchar, col_computed, col_with_default
+            col_int,
+            col_nvarchar,
+            col_computed,
+            col_with_default,
         ]
 
         reader = SchemaReader(mock_db_connection)
@@ -284,14 +289,14 @@ class TestSchemaReader:
         sequences = reader.get_sequences()
 
         assert len(sequences) == 1
-        assert sequences[0]['schema_name'] == "dbo"
-        assert sequences[0]['sequence_name'] == "seq_OrderNumbers"
-        assert sequences[0]['data_type'] == "bigint"
-        assert sequences[0]['start_value'] == 1
-        assert sequences[0]['increment'] == 1
-        assert sequences[0]['is_cycling'] is False
-        assert sequences[0]['is_cached'] is True
-        assert sequences[0]['cache_size'] == 50
+        assert sequences[0]["schema_name"] == "dbo"
+        assert sequences[0]["sequence_name"] == "seq_OrderNumbers"
+        assert sequences[0]["data_type"] == "bigint"
+        assert sequences[0]["start_value"] == 1
+        assert sequences[0]["increment"] == 1
+        assert sequences[0]["is_cycling"] is False
+        assert sequences[0]["is_cached"] is True
+        assert sequences[0]["cache_size"] == 50
 
     def test_get_sequences_with_filter(self, mock_db_connection):
         """Test getting sequences with schema filter."""
@@ -330,8 +335,8 @@ class TestSchemaReader:
         properties = reader.get_extended_properties()
 
         entry = properties[("dbo", "Orders")]
-        assert entry['table_description'] == "Customer orders."
-        assert entry['columns'] == {"OrderID": "Primary key.", "Total": "Order total in USD."}
+        assert entry["table_description"] == "Customer orders."
+        assert entry["columns"] == {"OrderID": "Primary key.", "Total": "Order total in USD."}
 
     def test_get_extended_properties_with_filter(self, mock_db_connection):
         """Test getting extended properties with schema filter."""
@@ -362,10 +367,10 @@ class TestSchemaReader:
         views = reader.get_views()
 
         assert len(views) == 2
-        assert views[0]['schema_name'] == "MQTT"
-        assert views[0]['view_name'] == "vwActiveReceivers"
-        assert "CREATE VIEW" in views[0]['definition']
-        assert views[1]['schema_name'] == "dbo"
+        assert views[0]["schema_name"] == "MQTT"
+        assert views[0]["view_name"] == "vwActiveReceivers"
+        assert "CREATE VIEW" in views[0]["definition"]
+        assert views[1]["schema_name"] == "dbo"
 
     def test_get_views_with_filter(self, mock_db_connection):
         """Test getting views with schema filter."""
@@ -380,7 +385,7 @@ class TestSchemaReader:
         views = reader.get_views(schema_filter=["MQTT"])
 
         assert len(views) == 1
-        assert views[0]['schema_name'] == "MQTT"
+        assert views[0]["schema_name"] == "MQTT"
 
         call_args = mock_db_connection.fetch_all.call_args
         assert "IN (?)" in call_args[0][0]
@@ -428,16 +433,18 @@ class TestSchemaReader:
         reader = SchemaReader(mock_db_connection)
         types = reader.get_user_defined_types()
 
-        assert types == [{
-            'kind': 'alias',
-            'schema_name': 'dbo',
-            'type_name': 'PhoneNumber',
-            'base_type': 'varchar',
-            'max_length': 20,
-            'precision': None,
-            'scale': None,
-            'is_nullable': True
-        }]
+        assert types == [
+            {
+                "kind": "alias",
+                "schema_name": "dbo",
+                "type_name": "PhoneNumber",
+                "base_type": "varchar",
+                "max_length": 20,
+                "precision": None,
+                "scale": None,
+                "is_nullable": True,
+            }
+        ]
 
     def test_get_user_defined_types_table_type(self, mock_db_connection):
         """Test getting a table type with its columns and primary key."""
@@ -461,19 +468,25 @@ class TestSchemaReader:
         mock_pk = MagicMock()
         mock_pk.column_name = "ID"
 
-        mock_db_connection.fetch_all.side_effect = [[], [mock_table_type], [mock_column], [mock_pk], []]
+        mock_db_connection.fetch_all.side_effect = [
+            [],
+            [mock_table_type],
+            [mock_column],
+            [mock_pk],
+            [],
+        ]
 
         reader = SchemaReader(mock_db_connection)
         types = reader.get_user_defined_types()
 
         assert len(types) == 1
         udt = types[0]
-        assert udt['kind'] == 'table'
-        assert udt['schema_name'] == 'dbo'
-        assert udt['type_name'] == 'IdList'
-        assert len(udt['columns']) == 1
-        assert udt['columns'][0].name == 'ID'
-        assert udt['primary_key_columns'] == ['ID']
+        assert udt["kind"] == "table"
+        assert udt["schema_name"] == "dbo"
+        assert udt["type_name"] == "IdList"
+        assert len(udt["columns"]) == 1
+        assert udt["columns"][0].name == "ID"
+        assert udt["primary_key_columns"] == ["ID"]
 
     def test_get_user_defined_types_clr_type(self, mock_db_connection):
         """Test getting a CLR (assembly-based) type."""
@@ -488,13 +501,15 @@ class TestSchemaReader:
         reader = SchemaReader(mock_db_connection)
         types = reader.get_user_defined_types()
 
-        assert types == [{
-            'kind': 'clr',
-            'schema_name': 'dbo',
-            'type_name': 'GeoPoint',
-            'assembly_name': 'SpatialTypes',
-            'class_name': 'SpatialTypes.GeoPoint'
-        }]
+        assert types == [
+            {
+                "kind": "clr",
+                "schema_name": "dbo",
+                "type_name": "GeoPoint",
+                "assembly_name": "SpatialTypes",
+                "class_name": "SpatialTypes.GeoPoint",
+            }
+        ]
 
     def test_get_user_defined_types_with_filter(self, mock_db_connection):
         """Test that schema filter is applied to the alias type query."""
@@ -529,10 +544,10 @@ class TestSchemaReader:
         procedures = reader.get_stored_procedures()
 
         assert len(procedures) == 2
-        assert procedures[0]['schema_name'] == "MQTT"
-        assert procedures[0]['procedure_name'] == "sp_GetReceiversByBroker"
-        assert procedures[0]['parameters'] == []
-        assert procedures[1]['schema_name'] == "dbo"
+        assert procedures[0]["schema_name"] == "MQTT"
+        assert procedures[0]["procedure_name"] == "sp_GetReceiversByBroker"
+        assert procedures[0]["parameters"] == []
+        assert procedures[1]["schema_name"] == "dbo"
 
     def test_get_stored_procedures_skip_encrypted(self, mock_db_connection):
         """Test that encrypted stored procedures are skipped."""
@@ -555,7 +570,7 @@ class TestSchemaReader:
 
         # Only non-encrypted procedure should be returned
         assert len(procedures) == 1
-        assert procedures[0]['procedure_name'] == "sp_Normal"
+        assert procedures[0]["procedure_name"] == "sp_Normal"
 
     def test_get_stored_procedures_with_parameters(self, mock_db_connection):
         """Test that a procedure's parameters are parsed separately from its definition."""
@@ -563,7 +578,9 @@ class TestSchemaReader:
         mock_proc.object_id = 301
         mock_proc.schema_name = "dbo"
         mock_proc.procedure_name = "sp_GetUser"
-        mock_proc.definition = "CREATE PROCEDURE dbo.sp_GetUser @UserId int, @Name nvarchar(50) = NULL OUTPUT AS ..."
+        mock_proc.definition = (
+            "CREATE PROCEDURE dbo.sp_GetUser @UserId int, @Name nvarchar(50) = NULL OUTPUT AS ..."
+        )
 
         mock_param1 = MagicMock()
         mock_param1.parameter_name = "@UserId"
@@ -591,16 +608,26 @@ class TestSchemaReader:
         procedures = reader.get_stored_procedures()
 
         assert len(procedures) == 1
-        params = procedures[0]['parameters']
+        params = procedures[0]["parameters"]
         assert params[0] == {
-            'name': '@UserId', 'data_type': 'int', 'max_length': 4,
-            'precision': 10, 'scale': None, 'is_output': False,
-            'has_default_value': False, 'default_value': None
+            "name": "@UserId",
+            "data_type": "int",
+            "max_length": 4,
+            "precision": 10,
+            "scale": None,
+            "is_output": False,
+            "has_default_value": False,
+            "default_value": None,
         }
         assert params[1] == {
-            'name': '@Name', 'data_type': 'nvarchar', 'max_length': 50,
-            'precision': None, 'scale': None, 'is_output': True,
-            'has_default_value': True, 'default_value': 'NULL'
+            "name": "@Name",
+            "data_type": "nvarchar",
+            "max_length": 50,
+            "precision": None,
+            "scale": None,
+            "is_output": True,
+            "has_default_value": True,
+            "default_value": "NULL",
         }
 
         param_query_call = mock_db_connection.fetch_all.call_args_list[1]
@@ -612,37 +639,46 @@ class TestSchemaReader:
         mock_fn_scalar.schema_name = "dbo"
         mock_fn_scalar.function_name = "fn_GetConfigValue"
         mock_fn_scalar.function_type = "SQL_SCALAR_FUNCTION"
-        mock_fn_scalar.definition = "CREATE FUNCTION dbo.fn_GetConfigValue(...) RETURNS NVARCHAR ..."
+        mock_fn_scalar.definition = (
+            "CREATE FUNCTION dbo.fn_GetConfigValue(...) RETURNS NVARCHAR ..."
+        )
 
         mock_fn_inline_tvf = MagicMock()
         mock_fn_inline_tvf.schema_name = "Logging"
         mock_fn_inline_tvf.function_name = "fn_GetRecentEvents"
         mock_fn_inline_tvf.function_type = "SQL_INLINE_TABLE_VALUED_FUNCTION"
-        mock_fn_inline_tvf.definition = "CREATE FUNCTION Logging.fn_GetRecentEvents(...) RETURNS TABLE AS RETURN ..."
+        mock_fn_inline_tvf.definition = (
+            "CREATE FUNCTION Logging.fn_GetRecentEvents(...) RETURNS TABLE AS RETURN ..."
+        )
 
         mock_fn_mstvf = MagicMock()
         mock_fn_mstvf.schema_name = "dbo"
         mock_fn_mstvf.function_name = "fn_SplitString"
         mock_fn_mstvf.function_type = "SQL_TABLE_VALUED_FUNCTION"
-        mock_fn_mstvf.definition = "CREATE FUNCTION dbo.fn_SplitString(...) RETURNS @Result TABLE ..."
+        mock_fn_mstvf.definition = (
+            "CREATE FUNCTION dbo.fn_SplitString(...) RETURNS @Result TABLE ..."
+        )
 
         # First call: SQL functions. Second call: CLR functions (none here).
-        mock_db_connection.fetch_all.side_effect = [[mock_fn_scalar, mock_fn_inline_tvf, mock_fn_mstvf], []]
+        mock_db_connection.fetch_all.side_effect = [
+            [mock_fn_scalar, mock_fn_inline_tvf, mock_fn_mstvf],
+            [],
+        ]
 
         reader = SchemaReader(mock_db_connection)
         functions = reader.get_functions()
 
         assert len(functions) == 3
 
-        assert functions[0]['function_name'] == "fn_GetConfigValue"
-        assert functions[0]['function_type'] == "SQL_SCALAR_FUNCTION"
-        assert functions[0]['kind'] == "sql"
+        assert functions[0]["function_name"] == "fn_GetConfigValue"
+        assert functions[0]["function_type"] == "SQL_SCALAR_FUNCTION"
+        assert functions[0]["kind"] == "sql"
 
-        assert functions[1]['function_name'] == "fn_GetRecentEvents"
-        assert functions[1]['function_type'] == "SQL_INLINE_TABLE_VALUED_FUNCTION"
+        assert functions[1]["function_name"] == "fn_GetRecentEvents"
+        assert functions[1]["function_type"] == "SQL_INLINE_TABLE_VALUED_FUNCTION"
 
-        assert functions[2]['function_name'] == "fn_SplitString"
-        assert functions[2]['function_type'] == "SQL_TABLE_VALUED_FUNCTION"
+        assert functions[2]["function_name"] == "fn_SplitString"
+        assert functions[2]["function_type"] == "SQL_TABLE_VALUED_FUNCTION"
 
     def test_get_functions_with_filter(self, mock_db_connection):
         """Test getting functions with schema filter."""
@@ -658,7 +694,7 @@ class TestSchemaReader:
         functions = reader.get_functions(schema_filter=["dbo"])
 
         assert len(functions) == 1
-        assert functions[0]['schema_name'] == "dbo"
+        assert functions[0]["schema_name"] == "dbo"
 
         first_call_args = mock_db_connection.fetch_all.call_args_list[0]
         assert "IN (?)" in first_call_args[0][0]
@@ -680,15 +716,17 @@ class TestSchemaReader:
         reader = SchemaReader(mock_db_connection)
         functions = reader.get_functions()
 
-        assert functions == [{
-            'kind': 'clr',
-            'schema_name': 'dbo',
-            'function_name': 'fn_GeoDistance',
-            'function_type': 'CLR_SCALAR_FUNCTION',
-            'assembly_name': 'SpatialTypes',
-            'class_name': 'SpatialTypes.GeoFunctions',
-            'method_name': 'Distance'
-        }]
+        assert functions == [
+            {
+                "kind": "clr",
+                "schema_name": "dbo",
+                "function_name": "fn_GeoDistance",
+                "function_type": "CLR_SCALAR_FUNCTION",
+                "assembly_name": "SpatialTypes",
+                "class_name": "SpatialTypes.GeoFunctions",
+                "method_name": "Distance",
+            }
+        ]
 
     def test_get_triggers_groups_events(self, mock_db_connection):
         """Test that a trigger firing on multiple events is returned once with all events."""
@@ -699,7 +737,9 @@ class TestSchemaReader:
         mock_insert_row.is_instead_of_trigger = False
         mock_insert_row.is_disabled = False
         mock_insert_row.event_type = "INSERT"
-        mock_insert_row.definition = "CREATE TRIGGER dbo.trg_Orders_Audit ON dbo.Orders AFTER INSERT, UPDATE AS ..."
+        mock_insert_row.definition = (
+            "CREATE TRIGGER dbo.trg_Orders_Audit ON dbo.Orders AFTER INSERT, UPDATE AS ..."
+        )
 
         mock_update_row = MagicMock()
         mock_update_row.schema_name = "dbo"
@@ -716,10 +756,10 @@ class TestSchemaReader:
         triggers = reader.get_triggers()
 
         assert len(triggers) == 1
-        assert triggers[0]['trigger_name'] == "trg_Orders_Audit"
-        assert triggers[0]['events'] == ["INSERT", "UPDATE"]
-        assert triggers[0]['is_instead_of'] is False
-        assert triggers[0]['is_disabled'] is False
+        assert triggers[0]["trigger_name"] == "trg_Orders_Audit"
+        assert triggers[0]["events"] == ["INSERT", "UPDATE"]
+        assert triggers[0]["is_instead_of"] is False
+        assert triggers[0]["is_disabled"] is False
 
     def test_get_triggers_instead_of_and_disabled(self, mock_db_connection):
         """Test INSTEAD OF and disabled trigger flags are captured."""
@@ -730,15 +770,17 @@ class TestSchemaReader:
         mock_row.is_instead_of_trigger = True
         mock_row.is_disabled = True
         mock_row.event_type = "DELETE"
-        mock_row.definition = "CREATE TRIGGER dbo.trg_vwOrders_Instead ON dbo.vwOrders INSTEAD OF DELETE AS ..."
+        mock_row.definition = (
+            "CREATE TRIGGER dbo.trg_vwOrders_Instead ON dbo.vwOrders INSTEAD OF DELETE AS ..."
+        )
 
         mock_db_connection.fetch_all.return_value = [mock_row]
 
         reader = SchemaReader(mock_db_connection)
         triggers = reader.get_triggers()
 
-        assert triggers[0]['is_instead_of'] is True
-        assert triggers[0]['is_disabled'] is True
+        assert triggers[0]["is_instead_of"] is True
+        assert triggers[0]["is_disabled"] is True
 
     def test_get_triggers_skip_encrypted(self, mock_db_connection):
         """Test that encrypted triggers are skipped."""
@@ -799,7 +841,7 @@ class TestDataClasses:
             is_identity=True,
             is_computed=False,
             default_value=None,
-            computed_definition=None
+            computed_definition=None,
         )
 
         assert column.name == "ConfigID"
@@ -819,7 +861,7 @@ class TestDataClasses:
             is_identity=True,
             is_computed=False,
             default_value=None,
-            computed_definition=None
+            computed_definition=None,
         )
 
         col2 = ColumnInfo(
@@ -832,14 +874,10 @@ class TestDataClasses:
             is_identity=False,
             is_computed=False,
             default_value=None,
-            computed_definition=None
+            computed_definition=None,
         )
 
-        table = TableInfo(
-            schema_name="dbo",
-            table_name="Config",
-            columns=[col1, col2]
-        )
+        table = TableInfo(schema_name="dbo", table_name="Config", columns=[col1, col2])
 
         assert table.schema_name == "dbo"
         assert table.table_name == "Config"

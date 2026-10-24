@@ -21,17 +21,27 @@ FIXTURE_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "test_schema.
 # write_per_object_format() writes them in (schemas/types/sequences before tables,
 # constraints/indexes after tables, seed data last).
 PER_OBJECT_SUBDIRS = [
-    "Schemas", "Types", "Sequences", "Tables",
-    "Constraints/01_PrimaryKeys", "Constraints/02_UniqueConstraints",
-    "Constraints/03_ForeignKeys", "Constraints/04_CheckConstraints",
-    "Indexes", "Views", "Procedures", "Functions", "Triggers", "SeedData",
+    "Schemas",
+    "Types",
+    "Sequences",
+    "Tables",
+    "Constraints/01_PrimaryKeys",
+    "Constraints/02_UniqueConstraints",
+    "Constraints/03_ForeignKeys",
+    "Constraints/04_CheckConstraints",
+    "Indexes",
+    "Views",
+    "Procedures",
+    "Functions",
+    "Triggers",
+    "SeedData",
 ]
 
 FORMATS = ["modular", "single", "per-object"]
 
 requires_real_server = pytest.mark.skipif(
     not os.getenv("SQLEXTRACT_TEST_SERVER"),
-    reason="Integration tests require SQLEXTRACT_TEST_SERVER environment variable"
+    reason="Integration tests require SQLEXTRACT_TEST_SERVER environment variable",
 )
 
 
@@ -83,8 +93,15 @@ def _deploy_extracted(extracted_dir: str, output_format: str, database: str) -> 
         deploy_script = os.path.join(extracted_dir, "deploy.ps1")
         result = subprocess.run(
             [
-                "powershell", "-NoProfile", "-NonInteractive", "-File", deploy_script,
-                "-Server", _server(), "-Database", database,
+                "powershell",
+                "-NoProfile",
+                "-NonInteractive",
+                "-File",
+                deploy_script,
+                "-Server",
+                _server(),
+                "-Database",
+                database,
             ],
             capture_output=True,
             text=True,
@@ -110,18 +127,13 @@ def _object_counts(database: str) -> dict:
             "SELECT COUNT(*) FROM sys.objects WHERE type IN ('FN', 'IF', 'TF')"
         )[0]
         triggers = conn.fetch_one("SELECT COUNT(*) FROM sys.triggers")[0]
-        row_counts = {
-            row[0]: row[1]
-            for row in conn.fetch_all(
-                """
+        row_counts = {row[0]: row[1] for row in conn.fetch_all("""
                 SELECT s.name + '.' + t.name, SUM(p.rows)
                 FROM sys.tables t
                 JOIN sys.schemas s ON s.schema_id = t.schema_id
                 JOIN sys.partitions p ON p.object_id = t.object_id AND p.index_id IN (0, 1)
                 GROUP BY s.name, t.name
-                """
-            )
-        }
+                """)}
         return {
             "tables": tables,
             "views": views,
@@ -171,10 +183,18 @@ class TestFullRoundTrip:
         if output_format != "modular":
             pytest.skip("Only applies to the modular output format")
         expected = {
-            "01_CREATE_SCHEMAS.sql", "04_CREATE_TABLES.sql", "05_CREATE_CONSTRAINTS.sql",
-            "06_CREATE_INDEXES.sql", "07_CREATE_TRIGGERS.sql", "08_CREATE_VIEWS.sql",
-            "09_CREATE_PROCEDURES.sql", "10_CREATE_FUNCTIONS.sql", "12_SEED_DATA.sql",
-            "deploy.ps1", "deploy.sh", "README.md",
+            "01_CREATE_SCHEMAS.sql",
+            "04_CREATE_TABLES.sql",
+            "05_CREATE_CONSTRAINTS.sql",
+            "06_CREATE_INDEXES.sql",
+            "07_CREATE_TRIGGERS.sql",
+            "08_CREATE_VIEWS.sql",
+            "09_CREATE_PROCEDURES.sql",
+            "10_CREATE_FUNCTIONS.sql",
+            "12_SEED_DATA.sql",
+            "deploy.ps1",
+            "deploy.sh",
+            "README.md",
         }
         written = set(os.listdir(extracted_dir))
         assert expected <= written

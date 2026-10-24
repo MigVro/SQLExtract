@@ -18,6 +18,7 @@ logger = get_logger(__name__)
 @dataclass
 class ConnectionConfig:
     """Database connection configuration."""
+
     server: str
     database: str
     port: int = 1433
@@ -101,11 +102,12 @@ class DatabaseConnection:
 
         for attempt in range(1, self.max_retries + 1):
             try:
-                logger.info(f"{prefix}Connecting to {self.config.server}/{self.config.database} (attempt {attempt}/{self.max_retries})")
+                logger.info(
+                    f"{prefix}Connecting to {self.config.server}/{self.config.database} (attempt {attempt}/{self.max_retries})"
+                )
 
                 self.connection = pyodbc.connect(
-                    connection_string,
-                    timeout=self.config.connection_timeout
+                    connection_string, timeout=self.config.connection_timeout
                 )
                 self.cursor = self.connection.cursor()
 
@@ -130,11 +132,15 @@ class DatabaseConnection:
                     )
 
                 if attempt < self.max_retries:
-                    wait_time = 2 ** attempt  # Exponential backoff
-                    logger.warning(f"{prefix}Connection failed: {error_msg}. Retrying in {wait_time}s...")
+                    wait_time = 2**attempt  # Exponential backoff
+                    logger.warning(
+                        f"{prefix}Connection failed: {error_msg}. Retrying in {wait_time}s..."
+                    )
                     time.sleep(wait_time)
                 else:
-                    raise ConnError(f"Connection failed after {self.max_retries} attempts: {error_msg}")
+                    raise ConnError(
+                        f"Connection failed after {self.max_retries} attempts: {error_msg}"
+                    )
 
     def execute_query(self, query: str, params: Optional[tuple] = None) -> pyodbc.Cursor:
         """Execute a SQL query.

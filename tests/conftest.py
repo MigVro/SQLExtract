@@ -13,7 +13,7 @@ def mock_connection_config():
         database="TestDB",
         user="sa",
         password="TestPassword123!",
-        trust_cert=True
+        trust_cert=True,
     )
 
 

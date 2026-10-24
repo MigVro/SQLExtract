@@ -25,7 +25,7 @@ class SeedDataExtractor:
         table_name: str,
         columns: List[ColumnInfo],
         max_rows: Optional[int] = None,
-        where_clause: Optional[str] = None
+        where_clause: Optional[str] = None,
     ) -> List[str]:
         """Extract data from a table as INSERT statements.
 
@@ -47,7 +47,7 @@ class SeedDataExtractor:
             return []
 
         column_names = [escape_sql_identifier(col.name) for col in data_columns]
-        column_list = ', '.join(column_names)
+        column_list = ", ".join(column_names)
 
         # Build SELECT query
         select_columns = []
@@ -95,30 +95,48 @@ class SeedDataExtractor:
                 value = row[i]
                 if value is None:
                     values.append("NULL")
-                elif col.data_type == 'bit':
+                elif col.data_type == "bit":
                     values.append("1" if value else "0")
-                elif col.data_type in ('int', 'bigint', 'smallint', 'tinyint', 'decimal', 'numeric', 'float', 'real', 'money', 'smallmoney'):
+                elif col.data_type in (
+                    "int",
+                    "bigint",
+                    "smallint",
+                    "tinyint",
+                    "decimal",
+                    "numeric",
+                    "float",
+                    "real",
+                    "money",
+                    "smallmoney",
+                ):
                     values.append(str(value))
-                elif col.data_type in ('varchar', 'nvarchar', 'char', 'nchar', 'text', 'ntext'):
+                elif col.data_type in ("varchar", "nvarchar", "char", "nchar", "text", "ntext"):
                     escaped_value = escape_sql_string(str(value))
-                    if col.data_type.startswith('n'):
+                    if col.data_type.startswith("n"):
                         values.append(f"N'{escaped_value}'")
                     else:
                         values.append(f"'{escaped_value}'")
-                elif col.data_type in ('datetime', 'datetime2', 'smalldatetime', 'date', 'time', 'datetimeoffset'):
+                elif col.data_type in (
+                    "datetime",
+                    "datetime2",
+                    "smalldatetime",
+                    "date",
+                    "time",
+                    "datetimeoffset",
+                ):
                     values.append(f"'{value}'")
-                elif col.data_type in ('uniqueidentifier',):
+                elif col.data_type in ("uniqueidentifier",):
                     values.append(f"'{value}'")
-                elif col.data_type in ('varbinary', 'binary', 'image'):
+                elif col.data_type in ("varbinary", "binary", "image"):
                     # Convert binary to hex string
-                    hex_value = value.hex() if value else ''
+                    hex_value = value.hex() if value else ""
                     values.append(f"0x{hex_value}" if hex_value else "NULL")
                 else:
                     # Default: treat as string
                     escaped_value = escape_sql_string(str(value))
                     values.append(f"'{escaped_value}'")
 
-            values_list = ', '.join(values)
+            values_list = ", ".join(values)
             insert_stmt = f"INSERT INTO {escape_sql_identifier(schema_name)}.{escape_sql_identifier(table_name)} ({column_list}) VALUES ({values_list})"
             insert_statements.append(insert_stmt)
 
